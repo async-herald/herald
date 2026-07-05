@@ -1,0 +1,7 @@
+rule commented-out-code {
+  meta {
+    type: code-smell
+    severity: warning
+  }
+  use commented_out_code
+}

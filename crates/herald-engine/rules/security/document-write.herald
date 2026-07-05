@@ -1,0 +1,18 @@
+rule document-write {
+  meta {
+    type: security
+    severity: warning
+    message: "document.write() — réécrit la page et constitue un vecteur XSS si l'entrée n'est pas maîtrisée ; construis le DOM via textContent / createElement"
+  }
+  match {
+    js, ts: document.write($X)
+    js, ts: document.writeln($X)
+  }
+
+  tests {
+    js {
+      "document.write(userInput)" => fail
+      "el.textContent = userInput" => pass
+    }
+  }
+}

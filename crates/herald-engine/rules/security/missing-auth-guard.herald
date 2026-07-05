@@ -1,0 +1,55 @@
+rule missing-auth-guard {
+  meta {
+    type: security
+    severity: warning
+    message: "Route mutante sans garde d'authentification visible — aucun middleware/extracteur/Depends d'auth n'apparaît sur ce handler ; vérifie que l'endpoint est bien protégé (ou qu'il est volontairement public). Heuristique : ignore l'auth appliquée globalement."
+  }
+  dedupe line
+
+  # Express / Fastify / Koa : route mutante (post/put/patch/delete) dont l'appel
+  # ne contient aucun mot-clé d'auth et dont le chemin n'est pas public.
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\.(post|put|patch|delete)\s*\(\s*['"]\//
+      and not @match ~ /(?i)(auth|guard|protect|token|passport|jwt|middleware|isauth|require|ensure|verify|permission|\bacl\b|\bcan\()/
+      and not @match ~ /(?i)(login|register|signup|signin|logout|webhook|health|public|ping|csrf)/
+  }
+
+  # axum (Rust) : handler qui reçoit de l'input (Json/Form/Path/Query) sans aucun
+  # extracteur d'auth dans sa signature.
+  lang rust {
+    pattern (function_item) @match
+    where @match ~ /:\s*(Json|Form|Path|Query|Multipart)\s*</
+      and not @match ~ /(?i)(authuser|claims|authenticated|identity|currentuser|session|bearer|apikey|token|\bauth\b|admin|principal|jwt|guard)/
+  }
+
+  # FastAPI / Flask (Python) : décorateur de route mutante sans Depends/garde
+  # d'auth, chemin non public.
+  lang py {
+    pattern (decorated_definition) @match
+    where @match ~ /@\w+\.(post|put|patch|delete)\s*\(/
+      and not @match ~ /(?i)(depends|login_required|requires_auth|current_user|get_current|httpbearer|oauth2|api_key|security\(|permission|token)/
+      and not @match ~ /(?i)(login|register|signup|signin|logout|webhook|health|public)/
+  }
+
+  tests {
+    js {
+      "router.post('/items', (req, res) => save(req.body))" => fail
+      "router.delete('/items/:id', (req, res) => del(req.params.id))" => fail
+      "router.post('/items', requireAuth, (req, res) => save(req.body))" => pass
+      "router.post('/login', (req, res) => login(req.body))" => pass
+      "router.get('/items', (req, res) => list())" => pass
+      "cache.delete('key')" => pass
+    }
+    rust {
+      "async fn create(Json(body): Json<Payload>) -> Resp { save(body) }" => fail
+      "async fn create(user: AuthUser, Json(body): Json<Payload>) -> Resp { save(body) }" => pass
+      "async fn health() -> &'static str { \"ok\" }" => pass
+    }
+    py {
+      "@app.post('/items')\ndef create(item: Item):\n    return save(item)" => fail
+      "@app.post('/items')\ndef create(item: Item, user=Depends(get_current_user)):\n    return save(item)" => pass
+      "@app.post('/login')\ndef login(c: Creds):\n    return do(c)" => pass
+    }
+  }
+}

@@ -1,0 +1,20 @@
+rule no_alert {
+  meta {
+    type: code-smell
+    severity: warning
+    message: "Avoid alert/confirm/prompt: blocking dialogs are bad UX and often debug leftovers"
+  }
+  dedupe linecol
+  match {
+    js, ts: alert($X)
+    js, ts: confirm($X)
+    js, ts: prompt($X)
+  }
+
+  tests {
+    js {
+      "alert('saved!')" => fail
+      "logger.warn('saved!')" => pass
+    }
+  }
+}

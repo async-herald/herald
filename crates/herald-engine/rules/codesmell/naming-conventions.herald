@@ -1,0 +1,7 @@
+rule naming-conventions {
+  meta {
+    type: code-smell
+    severity: warning
+  }
+  use naming_conventions
+}

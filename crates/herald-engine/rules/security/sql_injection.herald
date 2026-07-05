@@ -1,0 +1,24 @@
+rule sql_injection {
+  meta {
+    type: security
+    severity: error
+    message: "Possible SQL injection: query built by string concat/interpolation — use parameterized queries"
+  }
+  match {
+    js, ts: $DB.query($Q)
+    py: $CUR.execute($Q)
+  }
+  when $Q is dynamic
+
+  tests {
+    js {
+      "db.query('SELECT * FROM users WHERE id = ' + id)" => fail
+      "db.query(`DELETE FROM t WHERE x = ${x}`)" => fail
+      "db.query('SELECT * FROM users', [id])" => pass
+    }
+    py {
+      "cur.execute('SELECT * FROM t WHERE id = ' + uid)" => fail
+      "cur.execute('SELECT * FROM t WHERE id = %s', [uid])" => pass
+    }
+  }
+}

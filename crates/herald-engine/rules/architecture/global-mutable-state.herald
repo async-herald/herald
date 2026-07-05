@@ -1,0 +1,20 @@
+rule global-mutable-state {
+  meta {
+    type: architecture
+    severity: warning
+    message: "État mutable exporté au niveau module — un singleton modifiable partagé crée un couplage caché et des bugs d'ordre d'exécution ; expose une fonction ou un objet en lecture seule"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (export_statement) @match
+    where @match ~ /export\s+(?:let|var)\s+\w/
+  }
+
+  tests {
+    js {
+      "export let counter = 0" => fail
+      "export var config = {}" => fail
+      "export const API = 'x'" => pass
+    }
+  }
+}

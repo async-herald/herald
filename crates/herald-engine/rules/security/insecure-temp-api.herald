@@ -1,0 +1,22 @@
+rule insecure-temp-api {
+  meta {
+    type: security
+    severity: error
+    message: "API de fichier temporaire non sûre (nom prévisible — race/symlink) — utilise mkstemp / NamedTemporaryFile / os.CreateTemp"
+  }
+  lang py {
+    pattern (call) @match
+    where @match ~ /tempfile\.mktemp\s*\(|os\.(tmpnam|tempnam)\s*\(/
+  }
+  lang go {
+    pattern (call_expression) @match
+    where @match ~ /ioutil\.TempFile\s*\(\s*""/
+  }
+
+  tests {
+    py {
+      "f = tempfile.mktemp()" => fail
+      "f = tempfile.NamedTemporaryFile()" => pass
+    }
+  }
+}

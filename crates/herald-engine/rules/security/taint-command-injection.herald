@@ -1,0 +1,7 @@
+rule taint-command-injection {
+  meta {
+    type: security
+    severity: error
+  }
+  use taint_command_injection
+}

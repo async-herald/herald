@@ -1,0 +1,25 @@
+rule mass-assignment {
+  meta {
+    type: security
+    severity: error
+    message: "Possible mass assignment: a whole request payload is bound to a model — an attacker can set unintended fields (e.g. isAdmin, role); bind only an explicit allowlist of fields"
+  }
+  dedupe line
+  lang py {
+    pattern (call) @match
+    where @match ~ /\*\*\s*request\s*\.\s*(?:json|form|data|values|args|POST|GET)\b|\*\*\s*request\s*\.\s*get_json\s*\(/
+  }
+  lang js, ts {
+    pattern (call_expression) @match
+      (new_expression) @match
+    where @match ~ /\bObject\s*\.\s*assign\s*\(|\.\s*(?:create|update|updateOne|updateMany|findOneAndUpdate|findByIdAndUpdate|insertMany|build|save)\s*\(|\bnew\s+[A-Z]\w*\s*\(/
+      and @match ~ /req(?:uest)?\s*\.\s*(?:body|query|params)\s*[,)]/
+  }
+
+  tests {
+    js {
+      "User.create(req.body)" => fail
+      "User.create({ name: req.body.name })" => pass
+    }
+  }
+}

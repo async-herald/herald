@@ -1,0 +1,19 @@
+rule http-no-timeout {
+  meta {
+    type: reliability
+    severity: warning
+    message: "Appel HTTP sans timeout (reqwest::get) — une réponse lente bloque la tâche indéfiniment ; construis un Client avec .timeout(...) explicite plutôt que le raccourci global"
+  }
+  dedupe line
+  lang rust {
+    pattern (call_expression) @match
+    where @match ~ /reqwest::get\s*\(/
+  }
+
+  tests {
+    rust {
+      "async fn f() { let r = reqwest::get(url).await; }" => fail
+      "async fn f() { let r = client.get(url).timeout(d).send().await; }" => pass
+    }
+  }
+}

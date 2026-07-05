@@ -1,0 +1,35 @@
+rule redundant-boolean {
+  meta {
+    type: code-smell
+    severity: warning
+    message: "Redundant boolean literal — use the condition directly (`if (x)`, `return cond`) instead of comparing to or returning true/false"
+  }
+  dedupe linecol
+  lang js, ts, java {
+    pattern (binary_expression) @match
+    where @match ~ /(?:===?|!==?)\s*(?:true|false|True|False)\b|\b(?:true|false|True|False)\s*(?:===?|!==?)|\bis(?:\s+not)?\s+(?:True|False)\b/
+  }
+  lang js, ts, java {
+    pattern (ternary_expression) @match
+    where @match ~ /\?\s*(?:true|false)\s*:\s*(?:true|false)\b|\b(?:True|False)\s+if\b[\s\S]*?\belse\s+(?:True|False)\b/
+  }
+  lang py {
+    pattern (comparison_operator) @match
+    where @match ~ /(?:===?|!==?)\s*(?:true|false|True|False)\b|\b(?:true|false|True|False)\s*(?:===?|!==?)|\bis(?:\s+not)?\s+(?:True|False)\b/
+  }
+  lang py {
+    pattern (conditional_expression) @match
+    where @match ~ /\?\s*(?:true|false)\s*:\s*(?:true|false)\b|\b(?:True|False)\s+if\b[\s\S]*?\belse\s+(?:True|False)\b/
+  }
+  lang go, rust {
+    pattern (binary_expression) @match
+    where @match ~ /(?:===?|!==?)\s*(?:true|false|True|False)\b|\b(?:true|false|True|False)\s*(?:===?|!==?)|\bis(?:\s+not)?\s+(?:True|False)\b/
+  }
+
+  tests {
+    js {
+      "const ok = x === true" => fail
+      "const ok = x" => pass
+    }
+  }
+}

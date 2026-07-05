@@ -1,0 +1,14 @@
+rule unused-parameter {
+  meta {
+    type: code-smell
+    severity: warning
+  }
+  use unused_parameter
+
+  tests {
+    js {
+      "function f(unused, a) { return a; }" => fail
+      "function f(a) { return a; }" => pass
+    }
+  }
+}

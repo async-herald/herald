@@ -1,0 +1,24 @@
+rule regex-injection {
+  meta {
+    type: security
+    severity: warning
+    message: "Regex compiled from a non-literal source — untrusted input can cause ReDoS or regex injection; validate the input or use a fixed pattern (and a matching timeout / RE2)"
+  }
+  match {
+    js, ts: new RegExp($P)
+    py: re.compile($P)
+  }
+  when not $P is constant
+
+  tests {
+    js {
+      "new RegExp(userInput)" => fail
+      "new RegExp('^' + prefix + '$')" => fail
+      "new RegExp('^[a-z]+$')" => pass
+    }
+    py {
+      "re.compile(pattern)" => fail
+      "re.compile('^[a-z]+$')" => pass
+    }
+  }
+}

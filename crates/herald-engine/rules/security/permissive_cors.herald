@@ -1,0 +1,20 @@
+rule permissive_cors {
+  meta {
+    type: security
+    severity: warning
+    message: "Permissive CORS: Access-Control-Allow-Origin set to '*' or origin reflected — restrict to an explicit allowlist of trusted origins"
+  }
+  dedupe line
+  where @match ~ /(?i)access-control-allow-origin[^a-z0-9]{0,8}['"]\*['"]/
+    or (@match ~ /(?i)\b(?:cors|cross_origin)\b/ and @match ~ /(?i)\borigins?\b\s*[:=]\s*(?:['"]\*['"]|true)/)
+  lang js, ts, go { pattern (call_expression) @match }
+  lang py { pattern [(call) (assignment)] @match }
+  lang java { pattern (method_invocation) @match }
+
+  tests {
+    js {
+      "res.header('Access-Control-Allow-Origin', '*')" => fail
+      "res.header('Access-Control-Allow-Origin', 'https://app.example.com')" => pass
+    }
+  }
+}

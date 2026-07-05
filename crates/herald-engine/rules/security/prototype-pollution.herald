@@ -1,0 +1,17 @@
+rule prototype-pollution {
+  meta {
+    type: security
+    severity: error
+    message: "Possible prototype pollution: untrusted data flows into a recursive merge or a '__proto__'/'constructor' key — an attacker can pollute Object.prototype; use a Map, a null-prototype object, or an explicit key allowlist"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\b_\s*\.\s*(?:merge|mergeWith|defaultsDeep|set|setWith|assignInWith)\s*\(|\bObject\s*\.\s*assign\s*\(|\b(?:deepMerge|deepExtend|deepAssign|extend|merge)\s*\(/
+      and @match ~ /req(?:uest)?\s*\.\s*(?:body|query|params|headers|cookies)\b|ctx\s*\.\s*(?:request|query|params)\b|JSON\s*\.\s*parse\s*\(/
+  }
+  lang js, ts {
+    pattern (assignment_expression) @match
+    where @match ~ /\[\s*["'\x60](?:__proto__|constructor|prototype)["'\x60]\s*\]|\.__proto__\b/
+  }
+}

@@ -1,0 +1,21 @@
+rule loose-equality {
+  meta {
+    type: reliability
+    severity: warning
+    message: "Égalité faible (== / !=) — effectue une coercition de type source de bugs subtils ; utilise === / !=="
+  }
+  dedupe line
+  lang js, ts {
+    pattern (binary_expression) @match
+    where @match ~ /(^|[^=!<>])(==|!=)($|[^=])/
+  }
+
+  tests {
+    js {
+      "if (a == b) {}" => fail
+      "if (a != b) {}" => fail
+      "if (a === b) {}" => pass
+      "if (a !== b) {}" => pass
+    }
+  }
+}

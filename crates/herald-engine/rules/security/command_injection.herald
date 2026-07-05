@@ -1,0 +1,24 @@
+rule command_injection {
+  meta {
+    type: security
+    severity: error
+    message: "Possible command injection: shell command built from dynamic input — pass args as a list / validate input, avoid the shell"
+  }
+
+  match {
+    js, ts: exec($ARG)
+    py:     os.system($ARG)
+  }
+  when $ARG is dynamic
+
+  tests {
+    js {
+      "exec('ls ' + dir)" => fail
+      "exec('ls -la')"    => pass
+    }
+    py {
+      "os.system('rm ' + path)"        => fail
+      "os.system('rm -rf /tmp/cache')" => pass
+    }
+  }
+}

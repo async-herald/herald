@@ -1,0 +1,18 @@
+rule no_var {
+  meta {
+    type: code-smell
+    severity: warning
+    message: "Avoid `var`, use `let` or `const` instead"
+  }
+  match {
+    js, ts: var $X = $V
+  }
+
+  tests {
+    js {
+      "var count = 1" => fail
+      "let total = 2" => pass
+      "const max = 3" => pass
+    }
+  }
+}

@@ -1,0 +1,7 @@
+rule taint-xss {
+  meta {
+    type: security
+    severity: error
+  }
+  use taint_xss
+}

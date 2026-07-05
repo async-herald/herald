@@ -1,0 +1,20 @@
+rule insecure-random {
+  meta {
+    type: security
+    severity: error
+    message: "Insecure randomness: a non-cryptographic RNG generates a security-sensitive value (token, secret, OTP, salt…) — use a CSPRNG instead (crypto.randomBytes / crypto.getRandomValues, secrets / os.urandom, crypto/rand, java.security.SecureRandom, rand::rngs::OsRng)"
+  }
+  match {
+    js, ts: const $NAME = Math.random()
+    js, ts: $NAME = Math.random()
+  }
+  when $NAME matches /(?i)(token|secret|otp|password|session|nonce|salt|csrf|api_?key|key)/
+
+  tests {
+    js {
+      "const sessionToken = Math.random()" => fail
+      "let otp = Math.random()" => fail
+      "const ratio = Math.random()" => pass
+    }
+  }
+}

@@ -1,0 +1,31 @@
+rule zip-slip {
+  meta {
+    type: security
+    severity: warning
+    message: "Possible Zip Slip : extraction d'archive sans valider le chemin de destination — une entrée '../…' peut écrire hors du dossier cible ; canonicalise et confine au dossier de base"
+  }
+  lang py {
+    pattern (call) @match
+    where @match ~ /\.extractall\s*\(|\bunpack_archive\s*\(/
+  }
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\.extractAllTo\s*\(|\bdecompress\s*\(/
+  }
+  lang java {
+    pattern (object_creation_expression) @match
+    where @match ~ /getName\s*\(\s*\)/
+      and @match ~ /new\s+File\b|FileOutputStream|FileWriter|Paths\s*\.\s*get|Files\s*\.\s*(copy|write|newOutputStream)/
+  }
+
+  tests {
+    py {
+      "z.extractall(dest)" => fail
+      "z.extract(name, dest)" => pass
+    }
+    js {
+      "archive.extractAllTo(dir)" => fail
+      "archive.extractEntry(name)" => pass
+    }
+  }
+}

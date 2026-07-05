@@ -1,0 +1,8 @@
+rule high-coupling {
+  meta {
+    type: architecture
+    severity: warning
+    message: "Couplage élevé — trop d'imports dans ce module"
+  }
+  use high_coupling
+}

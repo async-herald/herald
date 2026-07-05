@@ -1,0 +1,11 @@
+pub mod max_file_lines;
+pub mod long_line;
+pub mod metrics;
+pub mod unused_import;
+pub mod commented_out_code;
+pub mod naming_conventions;
+pub mod unreachable_code;
+pub mod empty_catch;
+pub mod unused_parameter;
+pub mod todo_fixme;
+pub mod no_unused_vars;

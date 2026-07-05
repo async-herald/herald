@@ -1,0 +1,18 @@
+rule feature-envy {
+  meta {
+    type: architecture
+    severity: info
+    message: "Chaîne d'accès profonde a.b.c.d.e (feature envy / loi de Déméter) — ce code dépend trop de la structure interne d'autres objets ; déplace la logique près des données ou expose une méthode dédiée"
+  }
+  match {
+    js, ts: $A.$B.$C.$D.$E
+  }
+
+  tests {
+    js {
+      "const x = a.b.c.d.e" => fail
+      "const y = user.profile.address.city.name" => fail
+      "const z = a.b" => pass
+    }
+  }
+}

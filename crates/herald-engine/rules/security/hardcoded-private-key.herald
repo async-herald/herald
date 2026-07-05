@@ -1,0 +1,20 @@
+rule hardcoded-private-key {
+  meta {
+    type: security
+    severity: error
+    message: "Clé privée en dur (-----BEGIN … PRIVATE KEY-----) — un secret cryptographique ne doit jamais être commité ; charge-le depuis un gestionnaire de secrets / variable d'environnement et révoque celui-ci"
+  }
+  match {
+    : /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/
+  }
+
+  tests {
+    js {
+      "const key = '-----BEGIN RSA PRIVATE KEY-----'" => fail
+      "const key = process.env.PRIVATE_KEY" => pass
+    }
+    py {
+      "KEY = '-----BEGIN OPENSSH PRIVATE KEY-----'" => fail
+    }
+  }
+}

@@ -1,0 +1,21 @@
+rule insecure-jwt {
+  meta {
+    type: security
+    severity: error
+    message: "Insecure JWT: signature verification is disabled or the 'none' algorithm is allowed — always verify with a fixed, strong algorithm (e.g. HS256/RS256) and reject unsigned tokens"
+  }
+  dedupe line
+  where @match ~ /(?i)\bjwt|jsonwebtoken|jose\b|\bjwts\b|jwt\.|pyjwt/
+    and @match ~ /(?i)alg(?:orithm)?s?\s*['"]?\s*[:=]\s*\[?\s*['"]none['"]|signaturealgorithm\s*\.\s*none|verify_signature\s*['"]?\s*[:=]\s*(?:false|False)|verify\s*=\s*False/
+  lang js, ts { pattern (call_expression) @match }
+  lang py { pattern (call) @match }
+  lang go { pattern (call_expression) @match }
+  lang java { pattern (method_invocation) @match }
+
+  tests {
+    js {
+      "jwt.verify(token, key, { algorithms: ['none'] })" => fail
+      "jwt.verify(token, key, { algorithms: ['HS256'] })" => pass
+    }
+  }
+}

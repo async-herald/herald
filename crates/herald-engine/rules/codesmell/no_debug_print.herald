@@ -1,0 +1,90 @@
+rule no_debug_print {
+  meta {
+    type: code-smell
+    severity: warning
+    message: "Avoid leaving debug print statements in production code"
+  }
+  dedupe linecol
+  match {
+    js, ts: console.log($X)
+    js, ts: console.debug($X)
+    js, ts: console.info($X)
+    py:     print($X)
+    dart:   print($X)
+    dart:   debugPrint($X)
+    swift:  print($X)
+    swift:  debugPrint($X)
+    swift:  dump($X)
+    ruby:   puts($X)
+    ruby:   p($X)
+    ruby:   pp($X)
+    kotlin: println($X)
+    kotlin: print($X)
+    java:   System.out.println($X)
+    java:   $E.printStackTrace()
+    csharp: Console.WriteLine($X)
+    csharp: Debug.WriteLine($X)
+    go:     fmt.Println($X)
+    go:     fmt.Print($X)
+    rust:   dbg!($X)
+    rust:   eprintln!($X)
+    php:    var_dump($X)
+    php:    print_r($X)
+    lua:    print($X)
+  }
+
+  tests {
+    js {
+      "console.log('here', value)" => fail
+      "logger.info('here', value)" => pass
+    }
+    py {
+      "print(user)" => fail
+    }
+    dart {
+      "void f() { print(user); }" => fail
+      "void f() { debugPrint('x'); }" => fail
+      "void f() { log.info('x'); }" => pass
+    }
+    swift {
+      "func f() { print(user) }" => fail
+      "func f() { dump(state) }" => fail
+      "func f() { logger.log(user) }" => pass
+    }
+    ruby {
+      "puts user" => fail
+      "p result" => fail
+      "logger.info(user)" => pass
+    }
+    kotlin {
+      "fun f() { println(user) }" => fail
+      "fun f() { logger.info(user) }" => pass
+    }
+    java {
+      "class C { void m() { System.out.println(user); } }" => fail
+      "class C { void m() { e.printStackTrace(); } }" => fail
+      "class C { void m() { logger.info(user); } }" => pass
+    }
+    csharp {
+      "class C { void M() { Console.WriteLine(user); } }" => fail
+      "class C { void M() { logger.LogInformation(user); } }" => pass
+    }
+    go {
+      "func f() { fmt.Println(user) }" => fail
+      "func f() { logger.Info(user) }" => pass
+    }
+    rust {
+      "fn f() { dbg!(user); }" => fail
+      "fn f() { eprintln!(\"{}\", user); }" => fail
+      "fn f() { println!(\"ok\"); }" => pass
+    }
+    php {
+      "<?php var_dump($user);" => fail
+      "<?php print_r($data);" => fail
+      "<?php echo $x;" => pass
+    }
+    lua {
+      "print(user)" => fail
+    }
+  }
+}

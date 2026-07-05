@@ -1,0 +1,8 @@
+rule god-class {
+  meta {
+    type: architecture
+    severity: warning
+    message: "God class ({value} > {threshold} methods) — split responsibilities into smaller classes"
+  }
+  measure class_methods > 20 (java 25)
+}

@@ -1,0 +1,21 @@
+rule no-unwrap-in-prod {
+  meta {
+    type: reliability
+    severity: error
+    message: "Panic possible : .unwrap()/.expect() fait paniquer la tâche sur une erreur (→ 500 ou worker qui tombe en prod) ; propage avec ?, gère par match, ou utilise unwrap_or/ok_or avec un message explicite"
+  }
+  dedupe linecol
+  match {
+    rust: $X.unwrap()
+    rust: $X.expect($M)
+  }
+
+  tests {
+    rust {
+      "fn f() { let v = map.get(k).unwrap(); }" => fail
+      "fn f() { let v = parse(s).expect(\"bad\"); }" => fail
+      "fn f() { let v = map.get(k).unwrap_or(0); }" => pass
+      "fn f() -> Result<()> { let v = parse(s)?; Ok(()) }" => pass
+    }
+  }
+}

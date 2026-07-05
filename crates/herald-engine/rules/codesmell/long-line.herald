@@ -1,0 +1,8 @@
+rule long-line {
+  meta {
+    type: code-smell
+    severity: warning
+    message: "Line too long ({value} > {threshold} columns) — wrap it for readability"
+  }
+  measure line_length > 120
+}

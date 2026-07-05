@@ -1,0 +1,7 @@
+rule unused-import {
+  meta {
+    type: code-smell
+    severity: warning
+  }
+  use unused_import
+}

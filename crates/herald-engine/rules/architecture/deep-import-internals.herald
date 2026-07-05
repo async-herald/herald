@@ -1,0 +1,22 @@
+rule deep-import-internals {
+  meta {
+    type: architecture
+    severity: warning
+    message: "Import qui plonge dans les internes d'un autre module (/internal/, /src/, /dist/) — court-circuite l'API publique du module et le couple à son implémentation ; importe depuis son point d'entrée"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (import_statement) @match
+    where @match ~ /from\s*["'\x60](?:@[^\/"'\x60]+|[\w-]+)\/[^"'\x60]*\b(?:internal|internals|_internal|src|dist)\//
+  }
+
+  tests {
+    js {
+      "import { x } from 'next/dist/server'" => fail
+      "import { y } from 'lodash/internal/core'" => fail
+      "import { z } from '@/lib/utils'" => pass
+      "import { w } from '../lib/helpers'" => pass
+      "import { a } from '../pkg'" => pass
+    }
+  }
+}

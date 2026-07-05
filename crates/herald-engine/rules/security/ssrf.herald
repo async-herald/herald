@@ -1,0 +1,20 @@
+rule ssrf {
+  meta {
+    type: security
+    severity: error
+    message: "Possible SSRF: outbound request to a URL built from dynamic input — validate against an allowlist of hosts"
+  }
+  match {
+    js, ts: fetch($URL)
+    js, ts: axios($URL)
+  }
+  when $URL is user-input
+
+  tests {
+    js {
+      "fetch(req.query.target)" => fail
+      "axios(req.params.url)" => fail
+      "fetch('https://api.example.com/health')" => pass
+    }
+  }
+}

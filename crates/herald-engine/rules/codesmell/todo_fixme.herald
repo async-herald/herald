@@ -1,0 +1,14 @@
+rule todo_fixme {
+  meta {
+    type: code-smell
+    severity: warning
+  }
+  use todo_fixme
+
+  tests {
+    js {
+      "// TODO: handle the error case" => fail
+      "// returns the parsed config" => pass
+    }
+  }
+}

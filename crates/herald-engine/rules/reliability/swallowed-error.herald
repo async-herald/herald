@@ -1,0 +1,35 @@
+rule swallowed-error {
+  meta {
+    type: reliability
+    severity: warning
+    message: "Erreur avalée silencieusement (except: pass / if err != nil {} vide / unwrap_or_default) — l'échec disparaît sans trace ni traitement ; logge-le, propage-le, ou gère-le explicitement"
+  }
+  dedupe line
+  lang py {
+    pattern (except_clause) @match
+    where @match ~ /except[^\n:]*:\s*pass\b/
+  }
+  lang go {
+    pattern (if_statement) @match
+    where @match ~ /if\s+\w+\s*!=\s*nil\s*\{\s*\}/
+  }
+  lang rust {
+    pattern (call_expression) @match
+    where @match ~ /\.unwrap_or_default\s*\(/
+  }
+
+  tests {
+    py {
+      "try:\n    do()\nexcept Exception:\n    pass" => fail
+      "try:\n    do()\nexcept Exception as e:\n    log(e)" => pass
+    }
+    go {
+      "func f() { if err != nil {} }" => fail
+      "func f() { if err != nil { return err } }" => pass
+    }
+    rust {
+      "fn f() { let v = parse(s).unwrap_or_default(); }" => fail
+      "fn f() { let v = parse(s).unwrap_or(0); }" => pass
+    }
+  }
+}

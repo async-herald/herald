@@ -1,0 +1,19 @@
+rule useless-catch-rethrow {
+  meta {
+    type: code-smell
+    severity: info
+    message: "catch qui se contente de relancer l'erreur (catch (e) { throw e }) — n'apporte rien ; supprime le try/catch ou ajoute un vrai traitement (log, contexte, nettoyage)"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (catch_clause) @match
+    where @match ~ /catch\s*\(\s*\w+\s*\)\s*\{\s*throw\s+\w+\s*;?\s*\}/
+  }
+
+  tests {
+    js {
+      "try { f() } catch (e) { throw e }" => fail
+      "try { f() } catch (e) { log(e); throw e }" => pass
+    }
+  }
+}

@@ -1,0 +1,30 @@
+rule insecure_cookie {
+  meta {
+    type: security
+    severity: warning
+    message: "Cookie sans tous les flags de sécurité (HttpOnly, Secure, SameSite)"
+  }
+  lang js, ts {
+    pattern (call_expression
+      function: (member_expression property: (property_identifier) @m)
+      (#eq? @m "cookie")) @match
+    where not @match ~ /(?i)httponly/
+       or not @match ~ /(?i)secure/
+       or not @match ~ /(?i)samesite/
+  }
+  lang py {
+    pattern (call
+      function: (attribute attribute: (identifier) @m)
+      (#eq? @m "set_cookie")) @match
+    where not @match ~ /(?i)httponly/
+       or not @match ~ /(?i)secure/
+       or not @match ~ /(?i)samesite/
+  }
+
+  tests {
+    js {
+      "res.cookie('s', v, { httpOnly: true })" => fail
+      "res.cookie('s', v, { httpOnly: true, secure: true, sameSite: 'strict' })" => pass
+    }
+  }
+}

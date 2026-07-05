@@ -1,0 +1,30 @@
+rule tls_verification_disabled {
+  meta {
+    type: security
+    severity: error
+    message: "TLS certificate verification disabled — exposes traffic to man-in-the-middle attacks; never disable cert validation in production"
+  }
+  lang js, ts {
+    pattern (pair key: [(property_identifier) (string)] @k (#match? @k "rejectUnauthorized") value: (false)) @match
+  }
+  lang py {
+    pattern (keyword_argument name: (identifier) @k (#eq? @k "verify") value: (false)) @match
+  }
+  lang go {
+    pattern (keyed_element (literal_element (identifier) @k) (#eq? @k "InsecureSkipVerify") (literal_element (identifier) @v) (#eq? @v "true")) @match
+  }
+  lang rust {
+    pattern (call_expression function: (field_expression field: (field_identifier) @fn) (#match? @fn "^(danger_accept_invalid_certs|danger_accept_invalid_hostnames)$")) @match
+  }
+
+  tests {
+    js {
+      "const agent = new https.Agent({ rejectUnauthorized: false })" => fail
+      "const agent = new https.Agent({ rejectUnauthorized: true })" => pass
+    }
+    py {
+      "requests.get(url, verify=False)" => fail
+      "requests.get(url, verify=True)" => pass
+    }
+  }
+}

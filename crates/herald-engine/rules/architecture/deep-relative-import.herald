@@ -1,0 +1,18 @@
+rule deep-relative-import {
+  meta {
+    type: architecture
+    severity: warning
+    message: "Import relatif profond (../../../) — franchit plusieurs niveaux de module"
+  }
+  use deep_relative_import
+
+  tests {
+    js {
+      "import { x } from '../../../core/utils';" => fail
+      "import { y } from './local';" => pass
+    }
+    ts {
+      "import { z } from '../../shared';" => pass
+    }
+  }
+}

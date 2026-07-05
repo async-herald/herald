@@ -1,0 +1,25 @@
+rule no_eval {
+  meta {
+    type: security
+    severity: error
+    message: "Avoid eval()/exec(): executes arbitrary code, major security risk"
+  }
+
+  match {
+    js, ts: eval($X)
+    py:     eval($X)
+    py:     exec($X)
+  }
+
+  tests {
+    js {
+      "eval(userInput)" => fail
+      "eval('1 + 1')"   => fail
+      "evaluate(expr)"  => pass
+    }
+    py {
+      "eval(data)" => fail
+      "exec(code)" => fail
+    }
+  }
+}

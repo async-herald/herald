@@ -1,0 +1,20 @@
+rule assignment-in-condition {
+  meta {
+    type: reliability
+    severity: warning
+    message: "Affectation dans une condition (if (x = y)) — presque toujours un == oublié ; corrige la comparaison ou sors l'affectation de la condition"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (if_statement) @match
+    where @match ~ /if\s*\(\s*\w+(?:\.\w+)*\s*=\s*(?:[^=]|$)/
+  }
+
+  tests {
+    js {
+      "if (x = 5) {}" => fail
+      "if (x === 5) {}" => pass
+      "if (x == 5) {}" => pass
+    }
+  }
+}

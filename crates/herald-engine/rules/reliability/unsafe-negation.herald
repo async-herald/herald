@@ -1,0 +1,19 @@
+rule unsafe-negation {
+  meta {
+    type: reliability
+    severity: error
+    message: "Négation mal placée (!a instanceof B) — la priorité l'interprète comme (!a) instanceof B, toujours faux ; parenthése : !(a instanceof B)"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (binary_expression) @match
+    where @match ~ /!\s*\w[\w.]*\s+(?:instanceof|in)\b/
+  }
+
+  tests {
+    js {
+      "if (!x instanceof Foo) {}" => fail
+      "if (!(x instanceof Foo)) {}" => pass
+    }
+  }
+}

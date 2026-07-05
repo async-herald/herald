@@ -1,0 +1,7 @@
+rule no_unused_vars {
+  meta {
+    type: code-smell
+    severity: warning
+  }
+  use no_unused_vars
+}

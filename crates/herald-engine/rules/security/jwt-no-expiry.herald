@@ -1,0 +1,21 @@
+rule jwt-no-expiry {
+  meta {
+    type: security
+    severity: warning
+    message: "JWT signé sans expiration (pas d'expiresIn/exp) — un token volé reste valable indéfiniment ; fixe une durée de vie courte à la signature"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\.sign\s*\(/
+      and @match ~ /(?i)jwt|jsonwebtoken/
+      and not @match ~ /expiresIn|['"]exp['"]\s*:/
+  }
+
+  tests {
+    js {
+      "const t = jwt.sign(payload, secret);" => fail
+      "const t = jwt.sign(payload, secret, { expiresIn: '1h' });" => pass
+    }
+  }
+}

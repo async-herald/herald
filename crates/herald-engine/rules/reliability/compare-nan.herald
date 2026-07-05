@@ -1,0 +1,19 @@
+rule compare-nan {
+  meta {
+    type: reliability
+    severity: error
+    message: "Comparaison directe à NaN — toujours fausse car NaN n'est égal à rien (pas même lui-même) ; utilise Number.isNaN()"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (binary_expression) @match
+    where @match ~ /(?:===?|!==?)\s*NaN\b|\bNaN\s*(?:===?|!==?)/
+  }
+
+  tests {
+    js {
+      "if (x === NaN) {}" => fail
+      "if (Number.isNaN(x)) {}" => pass
+    }
+  }
+}

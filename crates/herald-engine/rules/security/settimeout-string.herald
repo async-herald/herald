@@ -1,0 +1,19 @@
+rule settimeout-string {
+  meta {
+    type: security
+    severity: warning
+    message: "setTimeout/setInterval avec une chaîne — équivaut à eval() et exécute du code arbitraire ; passe une fonction plutôt qu'une string"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\b(?:setTimeout|setInterval)\s*\(\s*["'\x60]/
+  }
+
+  tests {
+    js {
+      "setTimeout('doStuff()', 100)" => fail
+      "setTimeout(() => doStuff(), 100)" => pass
+    }
+  }
+}

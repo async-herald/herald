@@ -1,0 +1,7 @@
+rule xxe {
+  meta {
+    type: security
+    severity: error
+  }
+  use xxe
+}

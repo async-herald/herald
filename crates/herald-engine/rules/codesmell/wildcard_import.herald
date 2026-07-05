@@ -1,0 +1,17 @@
+rule wildcard_import {
+  meta {
+    type: code-smell
+    severity: warning
+    message: "Avoid 'from module import *': pollutes namespace, hides origins"
+  }
+  match {
+    py: from $M import *
+  }
+
+  tests {
+    py {
+      "from os import *" => fail
+      "from os import path" => pass
+    }
+  }
+}

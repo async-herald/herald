@@ -1,0 +1,25 @@
+rule path-traversal {
+  meta {
+    type: security
+    severity: error
+    message: "Possible path traversal: a filesystem path is built from dynamic input — canonicalize it and confine it to an allowed base directory, rejecting '..' segments"
+  }
+  match {
+    js, ts: $FS.readFile($P)
+    js, ts: $FS.writeFile($P)
+    py: open($P)
+  }
+  when $P is dynamic
+
+  tests {
+    js {
+      "fs.readFile('/data/' + name)" => fail
+      "fs.writeFile(`/tmp/${id}.txt`, data)" => fail
+      "fs.readFile('/etc/app/config.json')" => pass
+    }
+    py {
+      "open('/uploads/' + filename)" => fail
+      "open('/etc/app/config.json')" => pass
+    }
+  }
+}

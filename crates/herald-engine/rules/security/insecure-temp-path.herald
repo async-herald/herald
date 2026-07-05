@@ -1,0 +1,15 @@
+rule insecure-temp-path {
+  meta {
+    type: security
+    severity: warning
+    message: "Chemin temporaire prévisible (/tmp/…) — utilise une API qui crée un fichier unique (mkstemp / NamedTemporaryFile / os.CreateTemp / Files.createTempFile)"
+  }
+  match: /(?i)\/(var\/)?tmp\/[a-z0-9._-]{2,}/
+
+  tests {
+    js {
+      "const p = '/tmp/session.lock'" => fail
+      "const p = '/etc/app/config.json'" => pass
+    }
+  }
+}

@@ -1,0 +1,17 @@
+rule nested-ternary {
+  meta {
+    type: code-smell
+    severity: info
+    message: "Ternaire imbriqué — logique conditionnelle difficile à lire ; extrais une fonction ou un if/else explicite"
+  }
+  match {
+    js, ts: $A ? $B : $C ? $D : $E
+  }
+
+  tests {
+    js {
+      "const x = a ? 1 : b ? 2 : 3" => fail
+      "const x = a ? 1 : 2" => pass
+    }
+  }
+}

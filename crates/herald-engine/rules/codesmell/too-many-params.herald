@@ -1,0 +1,15 @@
+rule too-many-params {
+  meta {
+    type: code-smell
+    severity: warning
+    message: "Too many parameters ({value} > {threshold}) — group related arguments into an object/struct"
+  }
+  measure params > 5 (javascript 4, typescript 4, java 7)
+
+  tests {
+    js {
+      "function f(a, b, c, d, e, g) {}" => fail
+      "function f(a, b) {}" => pass
+    }
+  }
+}

@@ -1,0 +1,19 @@
+rule barrel-wildcard-reexport {
+  meta {
+    type: architecture
+    severity: info
+    message: "Ré-export en masse (export * from) — masque le couplage réel et alourdit le graphe de dépendances ; ré-exporte explicitement ce qui est public"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (export_statement) @match
+    where @match ~ /export\s*\*\s*from\s*["'\x60]/
+  }
+
+  tests {
+    js {
+      "export * from './internal'" => fail
+      "export { foo } from './api'" => pass
+    }
+  }
+}

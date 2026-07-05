@@ -1,0 +1,21 @@
+rule no_inner_html {
+  meta {
+    type: security
+    severity: error
+    message: "Avoid setting innerHTML/outerHTML directly: major XSS risk"
+  }
+  match {
+    js, ts: $EL.innerHTML = $VAL
+    js, ts: $EL.outerHTML = $VAL
+  }
+  when $VAL is dynamic
+
+  tests {
+    js {
+      "el.innerHTML = '<b>' + name + '</b>'" => fail
+      "el.innerHTML = `Hi ${user}`" => fail
+      "el.innerHTML = '<hr>'" => pass
+      "node.outerHTML = userHtml + ''" => fail
+    }
+  }
+}

@@ -1,0 +1,23 @@
+rule unsafe_deserialization {
+  meta {
+    type: security
+    severity: error
+    message: "Unsafe deserialization of untrusted data — can execute arbitrary code; use a safe loader (e.g. yaml.safe_load, JSON) and avoid native serialization"
+  }
+  match {
+    js, ts: unserialize($X)
+    py: pickle.loads($X)
+    py: yaml.load($X)
+  }
+
+  tests {
+    js {
+      "unserialize(payload)" => fail
+    }
+    py {
+      "pickle.loads(data)" => fail
+      "yaml.load(stream)" => fail
+      "yaml.safe_load(stream)" => pass
+    }
+  }
+}

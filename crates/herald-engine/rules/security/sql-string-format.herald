@@ -1,0 +1,38 @@
+rule sql-string-format {
+  meta {
+    type: security
+    severity: error
+    message: "SQL construit par formatage de chaîne (format!/f-string/Sprintf contenant une clé SQL et une interpolation) — risque d'injection ; utilise des requêtes paramétrées (bind), jamais l'interpolation de valeurs"
+  }
+  dedupe line
+  lang rust {
+    pattern (macro_invocation) @match
+    where @match ~ /(?i)\b(select|insert\s+into|update|delete\s+from)\b/
+      and @match ~ /\{[a-zA-Z0-9_]*\}/
+  }
+  lang py {
+    pattern (string) @match
+    where @match ~ /(?i)\b(select|insert\s+into|update|delete\s+from)\b/
+      and @match ~ /\{[a-zA-Z0-9_]*\}/
+  }
+  lang go {
+    pattern (call_expression) @match
+    where @match ~ /Sprintf\s*\(/
+      and @match ~ /(?i)\b(select|insert\s+into|update|delete\s+from)\b/
+  }
+
+  tests {
+    rust {
+      "fn q() { let s = format!(\"SELECT * FROM t WHERE id = {}\", id); }" => fail
+      "fn q() { let s = format!(\"hello {}\", name); }" => pass
+    }
+    py {
+      "q = f\"SELECT * FROM t WHERE id = {uid}\"" => fail
+      "q = f\"hello {name}\"" => pass
+    }
+    go {
+      "func q() { s := fmt.Sprintf(\"SELECT * FROM t WHERE id = %d\", id) }" => fail
+      "func q() { s := fmt.Sprintf(\"hello %s\", name) }" => pass
+    }
+  }
+}

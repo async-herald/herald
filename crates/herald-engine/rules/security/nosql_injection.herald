@@ -1,0 +1,7 @@
+rule nosql_injection {
+  meta {
+    type: security
+    severity: error
+  }
+  use nosql_injection
+}

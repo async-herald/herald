@@ -1,0 +1,14 @@
+rule unreachable-code {
+  meta {
+    type: code-smell
+    severity: warning
+  }
+  use unreachable_code
+
+  tests {
+    js {
+      "function f() { return 1; doMore(); }" => fail
+      "function f() { doMore(); return 1; }" => pass
+    }
+  }
+}

@@ -1,0 +1,15 @@
+rule empty-catch {
+  meta {
+    type: code-smell
+    severity: warning
+    message: "Empty catch block — the error is swallowed silently; log it, handle it, or rethrow"
+  }
+  use empty_catch
+
+  tests {
+    js {
+      "try { risky() } catch (e) {}" => fail
+      "try { risky() } catch (e) { log(e) }" => pass
+    }
+  }
+}

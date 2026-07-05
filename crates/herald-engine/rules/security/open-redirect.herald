@@ -1,0 +1,22 @@
+rule open-redirect {
+  meta {
+    type: security
+    severity: error
+    message: "Possible open redirect: a redirect target is taken from user input — validate it against an allowlist or only allow relative paths"
+  }
+  match {
+    js, ts: $RES.redirect($URL)
+    java: $RESP.sendRedirect($URL)
+  }
+  when $URL is user-input
+
+  tests {
+    js {
+      "res.redirect(req.query.next)" => fail
+      "res.redirect('/dashboard')" => pass
+    }
+    java {
+      "resp.sendRedirect(request.getParameter('url'))" => fail
+    }
+  }
+}

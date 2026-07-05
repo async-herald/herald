@@ -1,0 +1,23 @@
+rule ssti {
+  meta {
+    type: security
+    severity: error
+    message: "Possible server-side template injection: a template/expression is built from dynamic input — never render untrusted input as a template; use a fixed template with escaped variables"
+  }
+  match {
+    js, ts: $ENV.renderString($T)
+    py: render_template_string($T)
+  }
+  when not $T is constant
+
+  tests {
+    js {
+      "env.renderString(userTemplate)" => fail
+      "env.renderString('<h1>{{ title }}</h1>')" => pass
+    }
+    py {
+      "render_template_string(request.args.get('tpl'))" => fail
+      "render_template_string('<h1>Hello</h1>')" => pass
+    }
+  }
+}

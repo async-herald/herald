@@ -1,0 +1,20 @@
+rule missing-html-lang {
+  meta {
+    type: quality
+    severity: info
+    message: "<html> sans attribut lang — accessibilité (lecteurs d'écran) et SEO"
+  }
+  dedupe line
+
+  lang html {
+    pattern (element) @match
+    where @match ~ /(?i)^<html\b/ and not @match ~ /(?i)\slang\s*=/
+  }
+
+  tests {
+    html {
+      "<html><head></head></html>" => fail
+      "<html lang=\"fr\"><head></head></html>" => pass
+    }
+  }
+}

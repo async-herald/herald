@@ -1,0 +1,27 @@
+rule no-skipped-tests {
+  meta {
+    type: tests
+    severity: warning
+    message: "Test désactivé (.skip / xit / pytest.mark.skip) — un test ignoré durablement donne une fausse impression de couverture ; corrige-le ou supprime-le"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\b(?:describe|it|test|context)\s*\.\s*skip\s*\(|\bx(?:describe|it)\s*\(/
+  }
+  lang py {
+    pattern (decorator) @match
+    where @match ~ /@\s*(?:pytest\s*\.\s*mark\s*\.\s*skip|unittest\s*\.\s*skip|skip(?:Unless|If)?)\b/
+  }
+
+  tests {
+    js {
+      "it.skip('x', () => {})" => fail
+      "xdescribe('suite', () => {})" => fail
+      "it('x', () => {})" => pass
+    }
+    py {
+      "@pytest.mark.skip" => fail
+    }
+  }
+}

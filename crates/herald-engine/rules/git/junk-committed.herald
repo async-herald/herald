@@ -1,0 +1,20 @@
+rule junk-committed {
+  meta {
+    type: git
+    severity: warning
+    message: "Fichier généré/temporaire commité (.DS_Store, *.bak, *.pyc, *.log…) — ajoute-le au .gitignore"
+  }
+  path: /(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini)$|\.(bak|orig|swp|tmp|pyc|class|o|log)$|~$/
+
+  tests {
+    path {
+      "src/.DS_Store" => fail
+      "config/app.py.bak" => fail
+      "out/module.pyc" => fail
+      "logs/server.log" => fail
+      "main.c~" => fail
+      "src/app.js" => pass
+      "README.md" => pass
+    }
+  }
+}

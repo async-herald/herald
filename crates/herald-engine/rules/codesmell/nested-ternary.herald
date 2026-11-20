@@ -1,6 +1,6 @@
 rule nested-ternary {
   meta {
-    type: code-smell
+    type: quality
     severity: info
     message: "Ternaire imbriqué — logique conditionnelle difficile à lire ; extrais une fonction ou un if/else explicite"
   }

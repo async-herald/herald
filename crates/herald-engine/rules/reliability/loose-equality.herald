@@ -1,6 +1,6 @@
 rule loose-equality {
   meta {
-    type: reliability
+    type: quality
     severity: warning
     message: "Égalité faible (== / !=) — effectue une coercition de type source de bugs subtils ; utilise === / !=="
   }
@@ -9,6 +9,11 @@ rule loose-equality {
     pattern (binary_expression) @match
     where @match ~ /(^|[^=!<>])(==|!=)($|[^=])/
   }
+  # PHP a en plus `<>`, synonyme de `!=`.
+  lang php {
+    pattern (binary_expression) @match
+    where @match ~ /(^|[^=!<>])(==|!=|<>)($|[^=])/
+  }
 
   tests {
     js {
@@ -16,6 +21,12 @@ rule loose-equality {
       "if (a != b) {}" => fail
       "if (a === b) {}" => pass
       "if (a !== b) {}" => pass
+    }
+    php {
+      "<?php if ($a == $b) {}" => fail
+      "<?php if ($a <> $b) {}" => fail
+      "<?php if ($a === $b) {}" => pass
+      "<?php if ($a !== $b) {}" => pass
     }
   }
 }

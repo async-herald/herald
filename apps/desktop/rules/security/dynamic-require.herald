@@ -1,0 +1,23 @@
+// Version Herald Desktop. Mesure de référence : 0/10 vrais positifs (scripts
+// de build, traductions chargées par code de langue). Ne relève plus qu'un
+// module dont le chemin vient d'une entrée de requête.
+rule dynamic-require {
+  meta {
+    type: security
+    severity: error
+    message: "Chargement de module depuis une entrée de requête — permet de charger un fichier arbitraire du serveur ; valide le nom contre une liste fixe de modules"
+  }
+  match js, ts: require($PATH)
+  match js, ts: import($PATH)
+  when $PATH is user-input
+
+  tests {
+    js {
+      "require('./plugins/' + req.query.plugin)" => fail
+      "import(`./handlers/${req.params.name}.js`)" => fail
+      "require('./config')" => pass
+      "await import(`./locales/${currentLang.code}.json`)" => pass
+      "require(`${process.cwd()}/package.json`)" => pass
+    }
+  }
+}

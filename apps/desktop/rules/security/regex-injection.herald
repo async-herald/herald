@@ -1,0 +1,35 @@
+// Version Herald Desktop. Mesure de référence : 0/10 vrais positifs (motifs
+// échappés, constantes, littéraux accolés, drapeau re.DOTALL pris pour le
+// motif). Ne relève plus qu'un motif construit depuis une entrée de requête.
+rule regex-injection {
+  meta {
+    type: security
+    severity: warning
+    message: "Regex compilée depuis une entrée de requête — une entrée malveillante peut provoquer un ReDoS ou détourner le motif ; échappe-la (escapeRegExp / re.escape) ou utilise un motif fixe"
+  }
+  match {
+    js, ts: new RegExp($P)
+    js, ts: RegExp($P)
+    py: re.compile($P)
+    py: re.search($P, $S)
+    py: re.match($P, $S)
+  }
+  when $P is user-input
+
+  tests {
+    js {
+      "new RegExp(req.query.q)" => fail
+      "new RegExp('^' + req.params.prefix)" => fail
+      "new RegExp('^[a-z]+$')" => pass
+      "new RegExp(`^${escapeRegex(attrName)}\\[`)" => pass
+      "const re = new RegExp(`^${source}/?$`)" => pass
+      "const re = new RegExp(value, 'g')" => pass
+    }
+    py {
+      "re.compile(request.args.get('pattern'))" => fail
+      "re.compile(r'<!--.*?-->', re.DOTALL)" => pass
+      "re.compile(r'^(?P<name>.+?)' r'-(?P<ver>\\d+)')" => pass
+      "re.compile(OptionsHighlighter.highlights[0])" => pass
+    }
+  }
+}

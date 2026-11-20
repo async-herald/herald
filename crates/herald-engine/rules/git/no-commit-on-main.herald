@@ -1,0 +1,16 @@
+rule no-commit-on-main {
+  meta {
+    type: git
+    severity: info
+    message: "Analyse sur main/master — privilégie une branche dédiée + pull request"
+  }
+  branch: /^(main|master)$/
+
+  tests {
+    branch {
+      "main" => fail
+      "master" => fail
+      "feature/x" => pass
+    }
+  }
+}

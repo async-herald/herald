@@ -9,7 +9,7 @@ use crate::types::{FnRule, Issue, Severity};
 
 pub const META: FnRule = FnRule {
     name: "unused-import",
-    category: Category::CodeSmell,
+    category: Category::Quality,
     check,
 };
 
@@ -78,9 +78,9 @@ pub fn check(code: &str, tree: Option<&Tree>, language: Language) -> Vec<Issue> 
         }
         vec![Issue {
             rule: META.name.to_string(),
-            category: Category::CodeSmell,
+            category: Category::Quality,
             severity: Severity::Warning,
-            message: format!("Unused import '{name}' — remove it"),
+            message: format!("Import '{name}' inutilisé — supprime-le"),
             line,
             column,
         }]

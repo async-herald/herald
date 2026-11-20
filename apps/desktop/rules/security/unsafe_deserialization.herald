@@ -1,0 +1,38 @@
+// Version Herald Desktop. Mesure de référence : 0/10 vrais positifs (cache et
+// base de l'application, allowed_classes => false, YAML safe). Ne relève plus
+// que la désérialisation native d'une entrée de requête ou de cookie.
+rule unsafe_deserialization {
+  meta {
+    type: security
+    severity: error
+    message: "Désérialisation native d'une entrée de requête (pickle, yaml.load, unserialize) — peut exécuter du code arbitraire ; utilise JSON, yaml.safe_load ou unserialize avec allowed_classes => false"
+  }
+  match {
+    js, ts: unserialize($X)
+    py: pickle.loads($X)
+    py: pickle.load($X)
+    py: yaml.load($X)
+    py: yaml.unsafe_load($X)
+    php: unserialize($X)
+  }
+  // `is user-input` ne connaît pas request.data / get_data() / body (Flask, Django).
+  when $X is user-input or $X matches /\brequest\s*\.\s*(?:data|get_data|body|stream|files)\b/
+
+  tests {
+    js {
+      "unserialize(req.cookies.session)" => fail
+      "unserialize(payload)" => pass
+    }
+    py {
+      "obj = pickle.loads(request.data)" => fail
+      "pickle.loads(pickle.dumps(exc))" => pass
+      "value = pickle.loads(pickled)" => pass
+      "yaml.safe_load(stream)" => pass
+    }
+    php {
+      "<?php $o = unserialize($_COOKIE['session']);" => fail
+      "<?php return unserialize($data);" => pass
+      "<?php $o = json_decode($payload, true);" => pass
+    }
+  }
+}

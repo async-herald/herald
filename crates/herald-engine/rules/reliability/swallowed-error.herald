@@ -1,6 +1,6 @@
 rule swallowed-error {
   meta {
-    type: reliability
+    type: quality
     severity: warning
     message: "Erreur avalée silencieusement (except: pass / if err != nil {} vide / unwrap_or_default) — l'échec disparaît sans trace ni traitement ; logge-le, propage-le, ou gère-le explicitement"
   }

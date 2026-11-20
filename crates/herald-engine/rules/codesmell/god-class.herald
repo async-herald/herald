@@ -1,8 +1,12 @@
 rule god-class {
   meta {
-    type: architecture
-    severity: warning
-    message: "God class ({value} > {threshold} methods) — split responsibilities into smaller classes"
+    type: pattern
+    // info, pas warning : un compte de méthodes est un fait, pas un jugement
+    // fiable — une classe "value object" fluide (API de date/heure, builder…)
+    // peut légitimement avoir beaucoup de petites méthodes par choix
+    // d'architecture assumé, pas par accident.
+    severity: info
+    message: "Classe fourre-tout ({value} > {threshold} méthodes) — répartis les responsabilités dans des classes plus petites"
   }
   measure class_methods > 20 (java 25)
 }

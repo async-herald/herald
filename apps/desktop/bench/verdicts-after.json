@@ -1,0 +1,23 @@
+{
+  "committed-env-file": {"verdicts": "F", "note": "Règle du moteur (Rust). Fichier de développement sans secret."},
+  "committed-secret-file": {"verdicts": "FFFFF", "note": "Règle du moteur (Rust). Certificats publics et clés de test (caddytest, integration)."},
+  "document-write": {"verdicts": "FF", "note": "Chaînes constantes ou URL internes (WordPress)."},
+  "hardcoded-private-key": {"verdicts": "FFFF", "note": "Clés de test (t/unit) et clé factice à zéros."},
+  "insecure-jwt": {"verdicts": "F", "note": "Décodage sans vérification pour lire l'émetteur, vérification faite ensuite."},
+  "insecure-temp-path": {"verdicts": "FFFFFFFFFF", "note": "Docstrings, valeurs par défaut configurables, sockets."},
+  "insecure_cookie": {"verdicts": "FFFFFFFFFF", "note": "Cookie jars côté client (requests, scrapy), suppression de cookie."},
+  "insecure_transport": {"verdicts": "FFFFFFFFFF", "note": "Espaces de noms XML, docstrings, identifiants de relation (webfinger)."},
+  "jwt-no-expiry": {"verdicts": "FFFFFFFFFF", "note": "Expiration portée par le payload, les options ou la configuration, hors de l'appel."},
+  "mass-assignment": {"verdicts": "FFFF", "note": "Corps validé avant création ; routes sans création de modèle."},
+  "missing-auth-guard": {"verdicts": "FFFFFFFFFF", "note": "Appels de client HTTP pris pour des routes, tests Rust inline, serveur de développement."},
+  "permissive_cors": {"verdicts": "FFFFFFFFFF", "note": "Ressources publiques sans identifiants, code du middleware CORS lui-même."},
+  "php-superglobal-input": {"verdicts": "FFFFFFFFFF", "note": "Lecture (ou écriture) de $_GET/$_POST sans usage dangereux : pas une faille."},
+  "private-key-block": {"verdicts": "FFFFFFFFF", "note": "Règle du moteur (Rust). Regex et commentaires de documentation, clés de test."},
+  "sql-string-format": {"verdicts": "FFFFFFFFFF", "note": "Messages contenant « update », docstrings, identifiants internes, gabarits paramétrés."},
+  "taint-code-injection": {"verdicts": "FF", "note": "Règle du moteur (Rust). Code généré (emscripten), saisie interactive du développeur."},
+  "taint-command-injection": {"verdicts": "FFFFFFFFFF", "note": "Règle du moteur (Rust). RegExp.prototype.exec pris pour une exécution de commande."},
+  "taint-sql-injection": {"verdicts": "FFFFFFFFFF", "note": "Règle du moteur (Rust). RegExp.prototype.exec pris pour une requête."},
+  "taint-xss": {"verdicts": "FFFFFFF", "note": "Règle du moteur (Rust). innerHTML = '' et gabarits internes."},
+  "tls_verification_disabled": {"verdicts": "TTTTT", "note": "rejectUnauthorized: false en dur (base, Redis, SMTP), verify=False sur un appel requests."},
+  "weak_crypto": {"verdicts": "TTF", "note": "Vrais : md5($password) (Matomo), hashs MD5 de mots de passe encore acceptés (WordPress). Faux : compatibilité htpasswd {SHA} (mitmproxy)."}
+}

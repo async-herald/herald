@@ -1,0 +1,29 @@
+rule hardcoded-internal-url {
+  meta {
+    type: security
+    severity: info
+    message: "URL d'un environnement précis (interne, VPN, staging) figée dans le code — extrais-la en configuration/variable d'environnement plutôt que de coupler le code à un environnement particulier"
+  }
+  dedupe line
+
+  // Distinct d'insecure_transport (qui vise http:// en clair et exclut déjà
+  // localhost/IP privées comme non-risquées) : ici on flag justement CES
+  // adresses-là, mais pour une raison différente — pas un risque MITM, un
+  // risque de config qui fuit un environnement précis dans le code source.
+  lang js, ts, py {
+    pattern (string) @match
+    where @match ~ /(?i)https?:\/\/(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|[a-z0-9-]+\.(?:internal|corp|intranet|vpn))(?::\d+)?/
+  }
+
+  tests {
+    js {
+      "const api = 'http://10.0.4.12:8080/api'" => fail
+      "const api = 'https://payments.internal/v2'" => fail
+      "const api = 'https://api.stripe.com/v1'" => pass
+    }
+    py {
+      "api = 'http://192.168.1.50:9000'" => fail
+      "api = 'https://api.github.com'" => pass
+    }
+  }
+}

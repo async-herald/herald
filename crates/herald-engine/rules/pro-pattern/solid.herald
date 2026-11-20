@@ -1,0 +1,36 @@
+// Règle « SOLID » : regroupe plusieurs sous-règles, une par principe.
+// Toutes partagent un seul message (limite du moteur : 1 message par règle).
+rule solid {
+  meta {
+    type: pattern
+    severity: warning
+    message: "Entorse à un principe SOLID (responsabilité unique, ouvert/fermé, substitution de Liskov, ségrégation d'interface, inversion de dépendance) — revois la conception de ce composant"
+  }
+  dedupe line
+
+  // OCP — monkey-patch d'un prototype existant (on mute un type au lieu d'étendre)
+  match {
+    js, ts: $X.prototype.$Y = $Z
+  }
+
+  // LSP — méthode qui lève « not implemented » (un sous-type n'honore pas le contrat)
+  lang js, ts {
+    pattern (throw_statement) @match
+    where @match ~ /(?i)not\s*implemented/
+  }
+
+  // Note : la sous-règle SRP « paramètre booléen » a été retirée — un flag de
+  // config (`debug: bool = False`) est une API totalement idiomatique, pas
+  // une entorse au SRP. Elle déclenchait sur quasi toute API bien conçue avec
+  // des options (ex: 33 faux positifs sur Flask, un projet réputé propre) et
+  // ne peut pas distinguer statiquement "vrai flag qui fait bifurquer deux
+  // comportements distincts" de "simple booléen de config".
+
+  tests {
+    js {
+      "Array.prototype.last = function() { return this[0] }" => fail
+      "function m() { throw new Error('not implemented'); }" => fail
+      "const z = a.b" => pass
+    }
+  }
+}

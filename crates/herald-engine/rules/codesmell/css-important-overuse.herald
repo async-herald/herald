@@ -1,0 +1,19 @@
+rule css-important-overuse {
+  meta {
+    type: quality
+    severity: info
+    message: "!important — casse la cascade normale et force souvent une escalade (le prochain style aura besoin d'un autre !important) ; augmente plutôt la spécificité du sélecteur ou restructure l'ordre des règles"
+  }
+  dedupe line
+
+  lang css {
+    pattern (important) @match
+  }
+
+  tests {
+    css {
+      ".a { color: red !important; }" => fail
+      ".a { color: red; }" => pass
+    }
+  }
+}

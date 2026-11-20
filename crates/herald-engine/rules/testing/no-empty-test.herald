@@ -1,0 +1,20 @@
+rule no-empty-test {
+  meta {
+    type: tests
+    severity: warning
+    message: "Test au corps vide — ne vérifie rien mais passe au vert ; ajoute des assertions ou supprime-le"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\b(?:it|test)\s*\(\s*["'\x60][^"'\x60]*["'\x60]\s*,\s*(?:async\s*)?(?:\(\s*\)|function\s*\([^)]*\))\s*=?>?\s*\{\s*\}\s*\)/
+  }
+
+  tests {
+    js {
+      "it('does nothing', () => {})" => fail
+      "test('todo', function () {})" => fail
+      "it('checks x', () => { expect(a).toBe(b) })" => pass
+    }
+  }
+}

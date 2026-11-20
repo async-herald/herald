@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Async Herald
+GenericName=Analyse de code
+Comment=Analyse de code locale
+Exec=herald-desktop
+Icon=async-herald
+Terminal=false
+Categories=Development;
+StartupWMClass=herald-desktop

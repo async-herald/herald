@@ -2,6 +2,7 @@ rule nosql_injection {
   meta {
     type: security
     severity: error
+    message: "Injection NoSQL possible : une entrée non fiable atteint un filtre de requête ou un opérateur $where/$function — valide et caste l'entrée, ne passe jamais req.body/query directement dans le filtre"
   }
   use nosql_injection
 }

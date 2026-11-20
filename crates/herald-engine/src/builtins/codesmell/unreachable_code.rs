@@ -13,7 +13,7 @@ use crate::types::{FnRule, Issue, Severity};
 
 pub const META: FnRule = FnRule {
     name: "unreachable-code",
-    category: Category::CodeSmell,
+    category: Category::Quality,
     check,
 };
 
@@ -68,10 +68,10 @@ fn walk(node: Node, language: Language, block: &str, code: &str, out: &mut Vec<I
                     let p = next.start_position();
                     out.push(Issue {
                         rule: META.name.to_string(),
-                        category: Category::CodeSmell,
+                        category: Category::Quality,
                         severity: Severity::Warning,
                         message: format!(
-                            "Unreachable code — this statement can never run; it follows an unconditional `{kw}`"
+                            "Code mort après un `{kw}` inconditionnel — supprime-le"
                         ),
                         line: p.row + 1,
                         column: p.column + 1,

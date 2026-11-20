@@ -1,0 +1,17 @@
+rule linq-count-vs-any {
+  meta {
+    type: quality
+    severity: info
+    message: ".Count() > 0 énumère toute la séquence — .Any() s'arrête au premier élément"
+  }
+  match {
+    csharp: $X.Count() > 0
+  }
+
+  tests {
+    csharp {
+      "class C { void M() { if (items.Count() > 0) {} } }" => fail
+      "class C { void M() { if (items.Any()) {} } }" => pass
+    }
+  }
+}

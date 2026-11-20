@@ -1,11 +1,15 @@
 rule magic-number {
   meta {
-    type: code-smell
+    type: quality
     severity: info
     message: "Nombre magique dans une comparaison — extrais-le dans une constante nommée pour expliquer sa signification"
   }
   dedupe line
   lang js, ts {
+    pattern (binary_expression) @match
+    where @match ~ /(?:===?|!==?|<=?|>=?)\s*\d{3,}\b|\b\d{3,}\s*(?:===?|!==?|<=?|>=?)/
+  }
+  lang php {
     pattern (binary_expression) @match
     where @match ~ /(?:===?|!==?|<=?|>=?)\s*\d{3,}\b|\b\d{3,}\s*(?:===?|!==?|<=?|>=?)/
   }
@@ -16,6 +20,10 @@ rule magic-number {
       "if (count > 1000) {}" => fail
       "if (x === 0) {}" => pass
       "if (i < 10) {}" => pass
+    }
+    php {
+      "<?php if ($status === 404) {}" => fail
+      "<?php if ($i < 10) {}" => pass
     }
   }
 }

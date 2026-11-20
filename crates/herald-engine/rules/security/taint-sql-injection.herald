@@ -2,6 +2,7 @@ rule taint-sql-injection {
   meta {
     type: security
     severity: error
+    message: "Injection SQL : une entrée non fiable est concaténée dans une requête puis exécutée — utilise des requêtes paramétrées (placeholders), jamais de concaténation"
   }
   use taint_sql_injection
 }

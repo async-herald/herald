@@ -2,7 +2,7 @@ rule prototype-pollution {
   meta {
     type: security
     severity: error
-    message: "Possible prototype pollution: untrusted data flows into a recursive merge or a '__proto__'/'constructor' key — an attacker can pollute Object.prototype; use a Map, a null-prototype object, or an explicit key allowlist"
+    message: "Prototype pollution possible : une donnée non fiable circule dans un merge récursif ou une clé '__proto__'/'constructor' — un attaquant peut polluer Object.prototype ; utilise une Map, un objet sans prototype, ou une allowlist explicite de clés"
   }
   dedupe line
   lang js, ts {

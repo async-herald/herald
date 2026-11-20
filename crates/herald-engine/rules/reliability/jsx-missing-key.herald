@@ -1,0 +1,28 @@
+rule jsx-missing-key {
+  meta {
+    type: quality
+    severity: warning
+    message: "Liste JSX sans prop key — React ne peut pas suivre correctement les éléments d'une liste sans clé stable, ce qui casse le state local et l'ordre du DOM aux ré-affichages"
+  }
+  dedupe line
+
+  // Le nœud capturé est l'appel `.map(...)` entier : sa forme textuelle
+  // suffit à savoir s'il rend du JSX (une balise ouvrante) sans jamais poser
+  // `key=` nulle part dans le callback.
+  lang js, ts {
+    pattern (call_expression
+      function: (member_expression property: (property_identifier) @prop)
+    ) @match
+    where @prop ~ /^map$/
+      and @match ~ /<[A-Z][A-Za-z0-9.]*[\s\/>]/
+      and not @match ~ /\bkey\s*=/
+  }
+
+  tests {
+    js {
+      "items.map(item => <Row value={item} />)" => fail
+      "items.map(item => <Row key={item.id} value={item} />)" => pass
+      "items.map(item => item.value)" => pass
+    }
+  }
+}

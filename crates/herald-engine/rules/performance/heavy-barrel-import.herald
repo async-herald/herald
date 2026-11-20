@@ -1,0 +1,19 @@
+rule heavy-barrel-import {
+  meta {
+    type: quality
+    severity: info
+    message: "Import complet de lodash/moment — alourdit le bundle ; importe par méthode (lodash/get) ou une alternative légère (dayjs)"
+  }
+  match {
+    js, ts: require('lodash')
+    js, ts: require('moment')
+  }
+
+  tests {
+    js {
+      "const _ = require('lodash')" => fail
+      "const moment = require('moment')" => fail
+      "const get = require('lodash/get')" => pass
+    }
+  }
+}

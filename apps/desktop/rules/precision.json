@@ -1,0 +1,130 @@
+{
+  "rules": {
+    "committed-env-file": {
+      "true_positives": 0,
+      "labeled": 1,
+      "total": 1,
+      "note": "Règle du moteur (Rust). Fichier de développement sans secret."
+    },
+    "committed-secret-file": {
+      "true_positives": 0,
+      "labeled": 5,
+      "total": 5,
+      "note": "Règle du moteur (Rust). Certificats publics et clés de test (caddytest, integration)."
+    },
+    "document-write": {
+      "true_positives": 0,
+      "labeled": 2,
+      "total": 2,
+      "note": "Chaînes constantes ou URL internes (WordPress)."
+    },
+    "hardcoded-private-key": {
+      "true_positives": 0,
+      "labeled": 4,
+      "total": 4,
+      "note": "Clés de test (t/unit) et clé factice à zéros."
+    },
+    "insecure-jwt": {
+      "true_positives": 0,
+      "labeled": 1,
+      "total": 1,
+      "note": "Décodage sans vérification pour lire l'émetteur, vérification faite ensuite."
+    },
+    "insecure-temp-path": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 16,
+      "note": "Docstrings, valeurs par défaut configurables, sockets."
+    },
+    "insecure_cookie": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 11,
+      "note": "Cookie jars côté client (requests, scrapy), suppression de cookie."
+    },
+    "insecure_transport": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 222,
+      "note": "Espaces de noms XML, docstrings, identifiants de relation (webfinger)."
+    },
+    "jwt-no-expiry": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 11,
+      "note": "Expiration portée par le payload, les options ou la configuration, hors de l'appel."
+    },
+    "mass-assignment": {
+      "true_positives": 0,
+      "labeled": 4,
+      "total": 4,
+      "note": "Corps validé avant création ; routes sans création de modèle."
+    },
+    "missing-auth-guard": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 160,
+      "note": "Appels de client HTTP pris pour des routes, tests Rust inline, serveur de développement."
+    },
+    "permissive_cors": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 18,
+      "note": "Ressources publiques sans identifiants, code du middleware CORS lui-même."
+    },
+    "php-superglobal-input": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 3844,
+      "note": "Lecture (ou écriture) de $_GET/$_POST sans usage dangereux : pas une faille."
+    },
+    "private-key-block": {
+      "true_positives": 0,
+      "labeled": 9,
+      "total": 9,
+      "note": "Règle du moteur (Rust). Regex et commentaires de documentation, clés de test."
+    },
+    "sql-string-format": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 154,
+      "note": "Messages contenant « update », docstrings, identifiants internes, gabarits paramétrés."
+    },
+    "taint-code-injection": {
+      "true_positives": 0,
+      "labeled": 2,
+      "total": 2,
+      "note": "Règle du moteur (Rust). Code généré (emscripten), saisie interactive du développeur."
+    },
+    "taint-command-injection": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 19,
+      "note": "Règle du moteur (Rust). RegExp.prototype.exec pris pour une exécution de commande."
+    },
+    "taint-sql-injection": {
+      "true_positives": 0,
+      "labeled": 10,
+      "total": 11,
+      "note": "Règle du moteur (Rust). RegExp.prototype.exec pris pour une requête."
+    },
+    "taint-xss": {
+      "true_positives": 0,
+      "labeled": 7,
+      "total": 7,
+      "note": "Règle du moteur (Rust). innerHTML = '' et gabarits internes."
+    },
+    "tls_verification_disabled": {
+      "true_positives": 5,
+      "labeled": 5,
+      "total": 5,
+      "note": "rejectUnauthorized: false en dur (base, Redis, SMTP), verify=False sur un appel requests."
+    },
+    "weak_crypto": {
+      "true_positives": 2,
+      "labeled": 3,
+      "total": 3,
+      "note": "Vrais : md5($password) (Matomo), hashs MD5 de mots de passe encore acceptés (WordPress). Faux : compatibilité htpasswd {SHA} (mitmproxy)."
+    }
+  }
+}

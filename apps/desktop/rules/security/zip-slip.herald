@@ -1,0 +1,39 @@
+// Version Herald Desktop. Mesure de référence : 0/5 vrais positifs
+// (décompression brotli prise pour une archive, extractall(filter="data"),
+// zipfile qui assainit déjà les chemins). Ne relève plus que l'extraction
+// d'une archive tar sans filtre et l'extraction adm-zip.
+rule zip-slip {
+  meta {
+    type: security
+    severity: warning
+    message: "Extraction d'archive tar sans filtre — une entrée '../…' ou un lien symbolique peut écrire hors du dossier cible ; passe filter=\"data\" (Python 3.12+) ou vérifie chaque membre"
+  }
+  dedupe line
+  lang py {
+    pattern (call) @match
+    where @match ~ /(?i)tar\w*\s*\.\s*extractall\s*\(|\btarfile\s*\.\s*open\s*\([^)]*\)\s*\.\s*extractall\s*\(|\bunpack_archive\s*\(/
+      and not @match ~ /\bfilter\s*=/
+  }
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\.extractAllTo\s*\(/
+  }
+  lang java {
+    pattern (object_creation_expression) @match
+    where @match ~ /getName\s*\(\s*\)/
+      and @match ~ /new\s+File\b|FileOutputStream|FileWriter|Paths\s*\.\s*get|Files\s*\.\s*(copy|write|newOutputStream)/
+  }
+
+  tests {
+    py {
+      "tar.extractall(dest)" => fail
+      "shutil.unpack_archive(path, dest)" => fail
+      "archive.extractall(dest, filter='data')" => pass
+      "zip_archive.extractall(dest)" => pass
+    }
+    js {
+      "archive.extractAllTo(dir)" => fail
+      "const bin = decompress(arrayBuffer).buffer" => pass
+    }
+  }
+}

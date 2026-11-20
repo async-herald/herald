@@ -1,0 +1,17 @@
+rule no-wip-commit {
+  meta {
+    type: git
+    severity: warning
+    message: "Commit de travail en cours (wip/fixup/tmp…) — squashe-le avant de pousser"
+  }
+  commit: /(?i)^(wip|fixup!?|tmp|temp|asdf|test123|\.+)\b/
+
+  tests {
+    commit {
+      "wip" => fail
+      "wip: half done" => fail
+      "fixup! earlier commit" => fail
+      "feat: real feature" => pass
+    }
+  }
+}

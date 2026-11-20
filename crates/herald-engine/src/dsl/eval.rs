@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Node, QueryCursor, Tree};
 
-use crate::builtins::{architecture, codesmell, security};
+use crate::builtins::{architecture, codesmell, git, performance, security};
 use crate::language::Language;
 use crate::types::Issue;
 
@@ -101,10 +101,11 @@ fn run_metric(
         "function_lines" => lang_metric(metrics::function_length),
         "params" => lang_metric(metrics::param_count),
         "complexity" => lang_metric(metrics::complexity),
+        "cognitive" => lang_metric(metrics::cognitive),
         "nesting" => lang_metric(metrics::nesting),
         "class_methods" => lang_metric(metrics::god_class),
         "file_lines" => max_file_lines::check(code, max),
-        "line_length" => long_line::check(code, max),
+        "line_length" => long_line::check(code, language, max),
         _ => Vec::new(),
     }
 }
@@ -124,6 +125,11 @@ fn run_analyzer(key: &str, code: &str, tree: Option<&Tree>, lang: Language) -> V
         // architecture
         "high_coupling" => architecture::high_coupling::check(code, tree, lang),
         "deep_relative_import" => architecture::deep_relative_import::check(code, tree, lang),
+        // git
+        "merge_conflict" => git::merge_conflict::check(code, tree, lang),
+        // performance
+        "io_in_loop" => performance::io_in_loop::check(code, tree, lang),
+        "quadratic_loop" => performance::quadratic_loop::check(code, tree, lang),
         // security
         "nosql_injection" => security::nosql_injection::check(code, tree, lang),
         "xxe" => security::xxe::check(code, tree, lang),

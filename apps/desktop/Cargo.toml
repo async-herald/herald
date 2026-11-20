@@ -1,0 +1,48 @@
+[package]
+name = "async-herald-desktop"
+version = "0.1.8"
+edition = "2024"
+rust-version = "1.85"
+description = "Herald Desktop : analyse de code 100 % locale, interface native GPUI"
+license = "AGPL-3.0-only"
+publish = false
+
+[[bin]]
+name = "herald-desktop"
+path = "src/main.rs"
+
+[dependencies]
+rusqlite = { version = "0.37", features = ["bundled"] }
+semver = "1"
+# Lecture de Cargo.lock, poetry.lock, uv.lock et pyproject.toml (même version que le moteur).
+toml = "0.8"
+# Règles maintenues par l'app (`rules/`), embarquées dans le binaire.
+include_dir = "0.7"
+# Moteur d'analyse de Herald (`crates/herald-engine` de ce dépôt).
+herald-engine = { path = "../../crates/herald-engine" }
+anyhow = "1"
+gpui = "0.2.2"
+# Dossiers de données et dossier personnel selon le système (`src/paths.rs`).
+dirs = "5"
+# Export du rapport en PDF (`src/export.rs`), police Inter embarquée.
+printpdf = "0.7"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+unicode-segmentation = "1.13.3"
+ureq = { version = "3.5.1", features = ["json"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+# Mémoire et processeur de l'app pendant une analyse (`src/ui/resource_monitor.rs`).
+sysinfo = { version = "0.31", default-features = false, features = ["system"] }
+
+# Icône et informations de version de l'exécutable Windows (`build.rs`).
+[build-dependencies]
+embed-resource = "3"
+
+# Profils (optimisation des dépendances en dev, LTO en release) : `Cargo.toml`
+# à la racine du dépôt, Cargo ignorant ceux d'un membre de workspace.
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

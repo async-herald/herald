@@ -8,7 +8,7 @@ use crate::types::{FnRule, Issue, Severity};
 
 pub const META: FnRule = FnRule {
     name: "unused-parameter",
-    category: Category::CodeSmell,
+    category: Category::Quality,
     check,
 };
 
@@ -149,10 +149,10 @@ pub fn check(code: &str, tree: Option<&Tree>, language: Language) -> Vec<Issue> 
                 let p = node.start_position();
                 issues.push(Issue {
                     rule: META.name.to_string(),
-                    category: Category::CodeSmell,
+                    category: Category::Quality,
                     severity: Severity::Warning,
                     message: format!(
-                        "Unused parameter '{name}' — remove it or prefix with '_'"
+                        "Paramètre '{name}' inutilisé — supprime-le ou préfixe-le par '_'"
                     ),
                     line: p.row + 1,
                     column: p.column + 1,

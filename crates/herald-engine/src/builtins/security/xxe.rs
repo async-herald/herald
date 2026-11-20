@@ -14,7 +14,7 @@ pub const META: FnRule = FnRule {
     check,
 };
 
-const MSG: &str = "Possible XXE: an XML parser is created without disabling DTDs / external entities — disable doctype and external entity resolution (or use a hardened/defused parser)";
+const MSG: &str = "XXE possible : un parseur XML est créé sans désactiver les DTD / entités externes — désactive la résolution du doctype et des entités externes (ou utilise un parseur durci/defused)";
 
 // Java: instantiation of an XML parser factory…
 static JAVA_PARSER: LazyLock<Regex> = LazyLock::new(|| {

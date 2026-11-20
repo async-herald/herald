@@ -2,7 +2,7 @@ rule ssti {
   meta {
     type: security
     severity: error
-    message: "Possible server-side template injection: a template/expression is built from dynamic input — never render untrusted input as a template; use a fixed template with escaped variables"
+    message: "Injection de template côté serveur possible : un template/une expression est construit à partir d'une entrée dynamique — ne rends jamais une entrée non fiable comme template ; utilise un template fixe avec des variables échappées"
   }
   match {
     js, ts: $ENV.renderString($T)

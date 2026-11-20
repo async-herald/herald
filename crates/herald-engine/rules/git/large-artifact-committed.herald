@@ -1,0 +1,17 @@
+rule large-artifact-committed {
+  meta {
+    type: git
+    severity: warning
+    message: "Artefact volumineux commité (archive, dump, binaire) — préfère un stockage externe / LFS"
+  }
+  path: /\.(zip|tar|gz|tgz|rar|7z|iso|sqlite3?|db|dump|sql)$/
+
+  tests {
+    path {
+      "backup/data.sql" => fail
+      "release/app.zip" => fail
+      "src/app.js" => pass
+      "assets/logo.svg" => pass
+    }
+  }
+}

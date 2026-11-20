@@ -1,6 +1,6 @@
 rule compare-nan {
   meta {
-    type: reliability
+    type: quality
     severity: error
     message: "Comparaison directe à NaN — toujours fausse car NaN n'est égal à rien (pas même lui-même) ; utilise Number.isNaN()"
   }

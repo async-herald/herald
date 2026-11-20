@@ -176,6 +176,7 @@ impl Pred {
 // ---- `is …` structural conditions ----
 
 fn is_cond(kind: IsKind, node: Node, code: &str, lang: Language) -> bool {
+    let node = unwrap_argument(node);
     match kind {
         IsKind::Dynamic => is_dynamic(node, code, lang),
         IsKind::Constant => is_literal(node),
@@ -186,6 +187,19 @@ fn is_cond(kind: IsKind, node: Node, code: &str, lang: Language) -> bool {
     }
 }
 
+/// PHP wraps every call argument in an `argument` node that spans exactly the
+/// expression it holds. A metavariable therefore captures the wrapper, whose
+/// kind says nothing about the value — look through it before judging.
+fn unwrap_argument(node: Node) -> Node {
+    if node.kind() != "argument" {
+        return node;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .find(|c| c.kind() != "name") // skip the label of a named argument
+        .unwrap_or(node)
+}
+
 /// True if the node is a fixed literal value (string/number/bool) with no
 /// interpolation — i.e. a constant the developer typed, not a variable or call.
 fn is_literal(node: Node) -> bool {
@@ -194,6 +208,8 @@ fn is_literal(node: Node) -> bool {
             !has_descendant_kind(node, "interpolation")
         }
         "template_string" | "template_literal" => !has_descendant_kind(node, "template_substitution"),
+        // PHP double-quoted string: literal only while nothing is interpolated.
+        "encapsed_string" => !has_descendant_kind(node, "variable_name"),
         "number" | "integer" | "float" | "integer_literal" | "float_literal" => true,
         "true" | "false" | "null" | "none" | "boolean" | "nil" | "None" | "True" | "False" => true,
         _ => false,
@@ -213,8 +229,12 @@ fn is_dynamic(node: Node, code: &str, _lang: Language) -> bool {
         }
         // Python f-string: a `string` node containing an `interpolation`
         "string" | "string_literal" => has_descendant_kind(node, "interpolation"),
+        // PHP `"… $id …"` and heredocs: dynamic as soon as a variable is spliced in.
+        "encapsed_string" | "heredoc" => has_descendant_kind(node, "variable_name"),
         // format-style calls: Sprintf / String.format / "...".format(...) / format!()
-        "call_expression" | "call" | "method_invocation" | "macro_invocation" => {
+        // / sprintf() — PHP spells calls `function_call_expression`.
+        "call_expression" | "call" | "method_invocation" | "macro_invocation"
+        | "function_call_expression" | "member_call_expression" => {
             let text = node.utf8_text(code.as_bytes()).unwrap_or("");
             FORMAT_CALL.is_match(text)
         }
@@ -243,14 +263,21 @@ static USER_INPUT: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
         | request\.(GET|POST|args|form|values|cookies|headers|json)
         | os\.environ | process\.argv | sys\.argv | \bargv\b
         | r\.(URL|Form|PostForm)\b | \.FormValue\b | \.Query\(\)
+        # PHP: superglobals, and the Symfony Request accessors
+        | \$_(GET|POST|REQUEST|COOKIE|FILES)\b
+        | \$\w*[Rr]equest->(get|getContent|getPayload)\b
+        | ->(query|request|cookies|attributes|files)->(get|all)\b
         ",
     )
     .unwrap()
 });
 
 static FORMAT_CALL: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
-    Regex::new(r"(?x) \bSprintf\b | \bFprintf\b | \.format\b | \bformat!\s*\( | \bString\.format\b")
-        .unwrap()
+    Regex::new(
+        r"(?x) \bSprintf\b | \bFprintf\b | \.format\b | \bformat!\s*\( | \bString\.format\b
+        | \b(v?sprintf|vsprintf)\s*\(",
+    )
+    .unwrap()
 });
 
 // ---- ready-made `where` functions ----

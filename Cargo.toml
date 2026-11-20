@@ -1,3 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["crates/herald-engine", "crates/herald-cli"]
+members = ["crates/herald-engine", "crates/herald-cli", "apps/desktop"]
+
+# Dépendances optimisées même en développement : GPUI non optimisé rend
+# l'éditeur et le défilement de l'app de bureau très lents. Le code des crates
+# du dépôt reste en debug (compilation rapide).
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

@@ -1,7 +1,14 @@
 rule no-unwrap-in-prod {
   meta {
-    type: reliability
-    severity: error
+    type: quality
+    // Pas "error" : le moteur ne peut pas distinguer un unwrap vraiment
+    // risqué (parsing d'une entrée utilisateur) d'un unwrap prouvé sûr
+    // localement (`child.stderr.take().unwrap()` juste après avoir posé
+    // `Stdio::piped()`, `writeln!(out, …).unwrap()` sur une String qui ne
+    // peut pas échouer) — très courants en Rust idiomatique. "error" laissait
+    // entendre une quasi-certitude de bug ; 92 faux positifs sur ripgrep,
+    // un projet Rust réputé exemplaire, montrent que ce n'est pas le cas.
+    severity: warning
     message: "Panic possible : .unwrap()/.expect() fait paniquer la tâche sur une erreur (→ 500 ou worker qui tombe en prod) ; propage avec ?, gère par match, ou utilise unwrap_or/ok_or avec un message explicite"
   }
   dedupe linecol

@@ -6,6 +6,7 @@ use Language::*;
 pub enum Language {
     JavaScript, TypeScript, Rust, Python, Java, Go, Php,
     CSharp, Ruby, Kotlin, C, Cpp, Swift, Lua, Dart,
+    Html, Css,
 }
 
 type Entry = (Language, &'static [&'static str], &'static [&'static str], fn() -> TsLanguage);
@@ -27,6 +28,8 @@ const REGISTRY: &[Entry] = &[
     (Swift,      &["swift"],                          &[],                         || tree_sitter_swift::LANGUAGE.into()),
     (Lua,        &["lua"],                            &[],                         || tree_sitter_lua::LANGUAGE.into()),
     (Dart,       &["dart"],                           &[],                         || tree_sitter_dart::LANGUAGE.into()),
+    (Html,       &["html","htm","xhtml"],             &[],                         || tree_sitter_html::LANGUAGE.into()),
+    (Css,        &["css","scss","less"],              &[],                         || tree_sitter_css::LANGUAGE.into()),
 ];
 
 impl Language {

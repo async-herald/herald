@@ -1,6 +1,6 @@
 rule deep-import-internals {
   meta {
-    type: architecture
+    type: pattern
     severity: warning
     message: "Import qui plonge dans les internes d'un autre module (/internal/, /src/, /dist/) — court-circuite l'API publique du module et le couple à son implémentation ; importe depuis son point d'entrée"
   }

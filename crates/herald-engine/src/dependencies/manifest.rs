@@ -117,7 +117,6 @@ fn parse_pip_line(line: &str) -> Option<(String, String)> {
     Some((name.to_string(), line[op..].trim().to_string()))
 }
 
-
 fn go(code: &str) -> Vec<Dependency> {
     let mut deps = Vec::new();
     let mut in_block = false;

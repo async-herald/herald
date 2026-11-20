@@ -6,7 +6,7 @@ use tree_sitter::Tree;
 
 pub const META: FnRule = FnRule {
     name: "todo_fixme",
-    category: Category::CodeSmell,
+    category: Category::Quality,
     check,
 };
 
@@ -30,9 +30,9 @@ fn find_markers(text: &str, line: usize, column: usize) -> Vec<Issue> {
         if text.contains(marker) {
             issues.push(Issue {
                 rule: META.name.to_string(),
-                category: Category::CodeSmell,
+                category: Category::Quality,
                 severity: severity.clone(),
-                message: format!("{} marker in comment", marker),
+                message: format!("Marqueur {marker} laissé dans un commentaire — traite-le ou ouvre un ticket"),
                 line,
                 column,
             });

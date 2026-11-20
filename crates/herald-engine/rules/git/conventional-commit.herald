@@ -1,0 +1,17 @@
+rule conventional-commit {
+  meta {
+    type: git
+    severity: warning
+    message: "Message de commit non conventionnel — utilise feat:/fix:/chore:/docs:/refactor:/test:…"
+  }
+  commit not: /^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)(\(.+\))?!?: .+/
+
+  tests {
+    commit {
+      "feat: add login" => pass
+      "fix(api): handle null" => pass
+      "updated stuff" => fail
+      "WIP" => fail
+    }
+  }
+}

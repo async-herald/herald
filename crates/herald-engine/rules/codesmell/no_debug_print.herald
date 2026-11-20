@@ -1,8 +1,8 @@
 rule no_debug_print {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
-    message: "Avoid leaving debug print statements in production code"
+    message: "Évite de laisser des print de debug dans le code de production"
   }
   dedupe linecol
   match {
@@ -30,6 +30,8 @@ rule no_debug_print {
     rust:   eprintln!($X)
     php:    var_dump($X)
     php:    print_r($X)
+    php:    dd($X)
+    php:    dump($X)
     lua:    print($X)
   }
 
@@ -81,7 +83,10 @@ rule no_debug_print {
     php {
       "<?php var_dump($user);" => fail
       "<?php print_r($data);" => fail
+      "<?php dd($order);" => fail
+      "<?php dump($order);" => fail
       "<?php echo $x;" => pass
+      "<?php $logger->info($user);" => pass
     }
     lua {
       "print(user)" => fail

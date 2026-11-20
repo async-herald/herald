@@ -1,0 +1,19 @@
+rule io-in-loop {
+  meta {
+    type: quality
+    severity: warning
+    message: "I/O dans une boucle (await / requête réseau ou DB) — sérialise les appels (N+1) ; batche-les ou parallélise (Promise.all)"
+  }
+  dedupe linecol
+  use io_in_loop
+
+  tests {
+    js {
+      "async function f(ids){ for (const id of ids) { await fetchUser(id) } }" => fail
+      "async function f(ids){ await Promise.all(ids.map(fetchUser)) }" => pass
+    }
+    py {
+      "def f(urls):\n    for u in urls:\n        requests.get(u)" => fail
+    }
+  }
+}

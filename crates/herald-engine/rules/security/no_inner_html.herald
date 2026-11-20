@@ -2,7 +2,7 @@ rule no_inner_html {
   meta {
     type: security
     severity: error
-    message: "Avoid setting innerHTML/outerHTML directly: major XSS risk"
+    message: "Évite d'assigner innerHTML/outerHTML directement — risque XSS majeur"
   }
   match {
     js, ts: $EL.innerHTML = $VAL

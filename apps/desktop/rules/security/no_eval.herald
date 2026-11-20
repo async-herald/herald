@@ -1,0 +1,37 @@
+// Version Herald Desktop. Mesure de référence : 0/10 vrais positifs (eval/exec
+// de code généré par la bibliothèque ou de fichiers du développeur). Ne
+// relève plus qu'une évaluation d'entrée de requête.
+rule no_eval {
+  meta {
+    type: security
+    severity: error
+    message: "Exécution de code : une entrée de requête est évaluée (eval/exec/Function) — n'évalue jamais d'entrée, utilise un parseur (JSON.parse, ast.literal_eval) ou une table de correspondance"
+  }
+  match {
+    js, ts: eval($X)
+    js, ts: new Function($X)
+    py:     eval($X)
+    py:     exec($X)
+    php:    eval($X)
+  }
+  when $X is user-input
+
+  tests {
+    js {
+      "eval(req.query.expr)" => fail
+      "const f = new Function(req.body.code)" => fail
+      "eval('1 + 1')" => pass
+      "eval(callback)" => pass
+      "return await eval(`import('${importPath}')`)" => pass
+    }
+    py {
+      "eval(request.args['expr'])" => fail
+      "exec(code, globals, locals)" => pass
+      "eval(compile(f.read(), startup, 'exec'), ctx)" => pass
+    }
+    php {
+      "<?php eval($_POST['code']);" => fail
+      "<?php eval(var_export($value, true) . ';');" => pass
+    }
+  }
+}

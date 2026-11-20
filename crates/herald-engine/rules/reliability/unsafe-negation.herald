@@ -1,6 +1,6 @@
 rule unsafe-negation {
   meta {
-    type: reliability
+    type: quality
     severity: error
     message: "Négation mal placée (!a instanceof B) — la priorité l'interprète comme (!a) instanceof B, toujours faux ; parenthése : !(a instanceof B)"
   }

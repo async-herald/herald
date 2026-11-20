@@ -1,0 +1,76 @@
+// Version Herald Desktop. Mesure de référence : 0/10 vrais positifs (la
+// version du moteur relève tout identifiant md5/sha1 : imports, ETag, noms de
+// fichiers, couleurs, handshake WebSocket). Ne relève plus que :
+//   - un chiffrement par un algorithme cassé (DES, 3DES, RC4, RC2, Blowfish) ;
+//   - une empreinte MD5/SHA-1 d'un mot de passe (mesure : MD5 d'un secret ou
+//     d'un jeton pour une clé de cache ou un code de confirmation = faux positif).
+rule weak_crypto {
+  meta {
+    type: security
+    severity: error
+    message: "Cryptographie cassée appliquée à une donnée sensible (chiffrement DES/3DES/RC4/Blowfish, ou MD5/SHA-1 d'un mot de passe) — chiffre avec AES-GCM ou ChaCha20, hache les mots de passe avec bcrypt, scrypt ou Argon2"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /(?i)\bcreate(?:de)?cipher(?:iv)?\s*\(\s*['"`](?:des|des3|des-ede3?|rc4|rc2|bf|blowfish)\b/
+       or (@match ~ /\bcreateHash\s*\(\s*['"`](?:md5|sha1)['"`]\s*\)\s*\.\s*update\s*\(/
+           and @match ~ /\.update\s*\([^)]*(?i:passw|pwd|passphrase)/)
+  }
+  lang py {
+    pattern (call) @match
+    where @match ~ /\b(?:DES|DES3|ARC4|ARC2|Blowfish|CAST)\s*\.\s*new\s*\(|\balgorithms\s*\.\s*(?:TripleDES|ARC4|Blowfish|IDEA|CAST5)\s*\(/
+       or (@match ~ /\bhashlib\s*\.\s*(?:md5|sha1)\s*\(\s*[^)]*(?i:passw|pwd|passphrase)/
+           and not @match ~ /usedforsecurity\s*=\s*False/)
+  }
+  lang php {
+    pattern (function_call_expression) @match
+    where @match ~ /^(?:md5|sha1)\s*\(\s*\$\w*(?i:passw|pwd|passphrase)/
+       or @match ~ /(?i)^openssl_(?:en|de)crypt\s*\([^)]*['"](?:des|rc4|rc2|bf|blowfish)[-'"]/
+       or @match ~ /^mcrypt_/
+  }
+  lang go {
+    pattern (call_expression) @match
+    where @match ~ /\b(?:des\.NewCipher|des\.NewTripleDESCipher|rc4\.NewCipher)\s*\(/
+       or @match ~ /\b(?:md5|sha1)\.Sum\s*\(\s*\[\]byte\s*\(\s*\w*(?i:passw|pwd|passphrase)/
+  }
+  lang java {
+    pattern (method_invocation) @match
+    where @match ~ /\bCipher\s*\.\s*getInstance\s*\(\s*"(?:DES|DESede|RC4|RC2|ARCFOUR|Blowfish)\b/
+  }
+
+  tests {
+    js {
+      "crypto.createCipheriv('des-ede3-cbc', key, iv)" => fail
+      "const h = crypto.createHash('md5').update(password).digest('hex')" => fail
+      "const hash = createHash('sha1').update(worktreeRoot).digest()" => pass
+      "const n = parseInt(bytesToHex(md5(utf8ToBytes(input))), 16)" => pass
+      "crypto.createHash('sha1').update(result).digest('base64')" => pass
+      "crypto.createHash('sha256').update(password).digest('hex')" => pass
+      "return crypto.createHash('md5').update(`${this.id}${user.jwtSecret}`).digest('hex')" => pass
+    }
+    py {
+      "digest = hashlib.md5(password.encode()).hexdigest()" => fail
+      "cipher = DES.new(key, DES.MODE_ECB)" => fail
+      "etag = hashlib.md5(base.encode(), usedforsecurity=False).hexdigest()" => pass
+      "from hashlib import md5, sha256" => pass
+      "guid = hashlib.sha1(request.url.encode()).hexdigest()" => pass
+      "return hashlib.sha1(string)" => pass
+      "key = f\"AppByTokenLoader:{hashlib.md5(token.encode('utf-8')).hexdigest()}\"" => pass
+    }
+    php {
+      "<?php $h = md5($password);" => fail
+      "<?php $c = openssl_encrypt($data, 'des-ede3', $key);" => fail
+      "<?php if (md5($verboseToLower) === $serverToLower) {}" => pass
+      "<?php $c = openssl_encrypt($data, 'aes-256-gcm', $key, 0, $iv, $tag);" => pass
+    }
+    go {
+      "func f() { c, _ := des.NewCipher(key) }" => fail
+      "func f() { h := sha1.Sum(data) }" => pass
+    }
+    java {
+      "Cipher c = Cipher.getInstance(\"DES/ECB/PKCS5Padding\");" => fail
+      "Cipher c = Cipher.getInstance(\"AES/GCM/NoPadding\");" => pass
+    }
+  }
+}

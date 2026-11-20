@@ -1,0 +1,44 @@
+// Version Herald Desktop. Mesure de référence : 0/10 vrais positifs
+// (identifiants internes, quote_name, valeurs de configuration). Ne relève
+// plus qu'une requête construite par concaténation avec une entrée de requête.
+rule sql_injection {
+  meta {
+    type: security
+    severity: error
+    message: "Injection SQL : une entrée de requête est concaténée dans la requête — utilise des requêtes paramétrées (placeholders), jamais de concaténation"
+  }
+  match {
+    js, ts: $DB.query($Q)
+    js, ts: $DB.raw($Q)
+    py: $CUR.execute($Q)
+    php: $DB->query($Q)
+    php: $DB->exec($Q)
+    php: $DB->executeQuery($Q)
+    php: mysqli_query($CONN, $Q)
+    php: pg_query($CONN, $Q)
+  }
+  when $Q is dynamic and $Q is user-input
+
+  tests {
+    js {
+      "db.query('SELECT * FROM users WHERE id = ' + req.query.id)" => fail
+      "db.query(`DELETE FROM t WHERE x = ${req.body.x}`)" => fail
+      "db.query('SELECT * FROM users WHERE id = $1', [req.query.id])" => pass
+      "client.query(`CREATE DATABASE \"${dbName}\"`)" => pass
+      "this.query(`RELEASE SAVEPOINT typeorm_${this.transactionDepth - 1}`)" => pass
+      "this.query(conn, `BEGIN TRANSACTION ${trxMode};`)" => pass
+    }
+    py {
+      "cur.execute('SELECT * FROM t WHERE id = ' + request.args['id'])" => fail
+      "cur.execute('SELECT * FROM t WHERE id = %s', [request.args['id']])" => pass
+      "cursor.execute('PRAGMA index_list(%s)' % self.connection.ops.quote_name(table_name))" => pass
+      "self.master.commands.execute('view.properties.inbounds %d' % index)" => pass
+    }
+    php {
+      "<?php $db->query('SELECT * FROM users WHERE id = ' . $_GET['id']);" => fail
+      "<?php mysqli_query($conn, \"SELECT * FROM t WHERE id = {$_POST['id']}\");" => fail
+      "<?php $db->query('INSERT INTO ' . $this->tablePrefixed . ' (ip) VALUES(?)', [$ip]);" => pass
+      "<?php $this->getPdo()->exec(\"BEGIN {$mode} TRANSACTION\");" => pass
+    }
+  }
+}

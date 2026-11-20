@@ -1,8 +1,8 @@
 rule redundant-boolean {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
-    message: "Redundant boolean literal — use the condition directly (`if (x)`, `return cond`) instead of comparing to or returning true/false"
+    message: "Littéral booléen redondant — utilise la condition directement (`if (x)`, `return cond`) plutôt que de la comparer à ou renvoyer true/false"
   }
   dedupe linecol
   lang js, ts, java {

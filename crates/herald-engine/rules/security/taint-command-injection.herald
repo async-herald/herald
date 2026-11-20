@@ -2,6 +2,7 @@ rule taint-command-injection {
   meta {
     type: security
     severity: error
+    message: "Injection de commande : une entrée non fiable atteint exec/spawn/os.system — un attaquant peut exécuter des commandes arbitraires ; évite le shell, passe les arguments en tableau et valide l'entrée"
   }
   use taint_command_injection
 }

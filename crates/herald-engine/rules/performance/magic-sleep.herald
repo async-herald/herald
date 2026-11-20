@@ -1,0 +1,23 @@
+rule magic-sleep {
+  meta {
+    type: quality
+    severity: info
+    message: "Délai fixe en dur (sleep) — si c'est pour attendre qu'une ressource asynchrone soit prête, préfère un vrai mécanisme d'attente (retry actif, event, condition) plutôt qu'un délai arbitraire, trop court ou inutilement long"
+  }
+  // "is constant" exclut déjà les délais nommés (RETRY_DELAY, config.timeout…)
+  // — un vrai magic number, pas une constante documentée ailleurs.
+  //
+  // Scopé à Python seul : la même forme (`match go: time.Sleep($N)`,
+  // `match java: Thread.sleep($N)`) ne matchait rien du tout pour ces
+  // langages avec ce moteur de motif — plutôt qu'une règle silencieusement
+  // inopérante, mieux vaut la garder pour le langage vérifié.
+  when $N is constant
+  match py: time.sleep($N)
+
+  tests {
+    py {
+      "time.sleep(2)" => fail
+      "time.sleep(RETRY_DELAY)" => pass
+    }
+  }
+}

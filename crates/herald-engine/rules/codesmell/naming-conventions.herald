@@ -1,7 +1,8 @@
 rule naming-conventions {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
+    message: "Nom de fonction/classe qui ne respecte pas la convention du langage — renomme-le selon l'usage idiomatique (camelCase, PascalCase, snake_case…)"
   }
   use naming_conventions
 }

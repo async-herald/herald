@@ -1,0 +1,24 @@
+// Version Herald Desktop. Mesure de référence : 0/1 vrai positif (chaîne
+// constante, sans risque). Ne relève plus qu'une chaîne construite
+// dynamiquement, seule à pouvoir exécuter du code venu d'ailleurs.
+rule settimeout-string {
+  meta {
+    type: security
+    severity: warning
+    message: "setTimeout/setInterval avec une chaîne construite dynamiquement — équivaut à eval() ; passe une fonction"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\b(?:setTimeout|setInterval)\s*\(\s*(?:["'][^"']*["']\s*\+|\w+\s*\+\s*["']|`[^`]*\$\{)/
+  }
+
+  tests {
+    js {
+      "setTimeout('show(' + id + ')', 100)" => fail
+      "setInterval(`refresh(${name})`, 1000)" => fail
+      "setTimeout('location.reload();', timeoutPeriod)" => pass
+      "setTimeout(() => doStuff(), 100)" => pass
+    }
+  }
+}

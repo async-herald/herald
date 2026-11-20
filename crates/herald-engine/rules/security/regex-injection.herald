@@ -2,7 +2,7 @@ rule regex-injection {
   meta {
     type: security
     severity: warning
-    message: "Regex compiled from a non-literal source — untrusted input can cause ReDoS or regex injection; validate the input or use a fixed pattern (and a matching timeout / RE2)"
+    message: "Regex compilée depuis une source non littérale — une entrée non fiable peut causer un ReDoS ou une injection regex ; valide l'entrée ou utilise un motif fixe (avec un timeout adapté / RE2)"
   }
   match {
     js, ts: new RegExp($P)

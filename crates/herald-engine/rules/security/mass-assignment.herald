@@ -2,7 +2,7 @@ rule mass-assignment {
   meta {
     type: security
     severity: error
-    message: "Possible mass assignment: a whole request payload is bound to a model — an attacker can set unintended fields (e.g. isAdmin, role); bind only an explicit allowlist of fields"
+    message: "Mass assignment possible : le payload entier de la requête est lié à un modèle — un attaquant peut positionner des champs non prévus (ex. isAdmin, role) ; ne lie qu'une liste explicite de champs autorisés"
   }
   dedupe line
   lang py {

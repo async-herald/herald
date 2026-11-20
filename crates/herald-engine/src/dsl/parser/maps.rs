@@ -7,16 +7,24 @@ use crate::types::Severity;
 pub(super) fn parse_category(s: &str) -> Result<Category, String> {
     Ok(match s {
         "security" => Category::Security,
-        "code-smell" | "codesmell" => Category::CodeSmell,
+        "quality" | "code-smell" | "codesmell" => Category::Quality,
         "dependencies" => Category::Dependencies,
-        "architecture" => Category::Architecture,
-        "dead-code" | "deadcode" => Category::CodeSmell,
-        "ai-pattern" | "ai" => Category::Ai,
-        "git" => Category::Git,
-        "performance" | "perf" => Category::Performance,
+        "dead-code" | "deadcode" => Category::Quality,
+        // Catégorie « Patterns IA » retirée du produit. L'alias reste accepté
+        // pour que les règles personnalisées déjà écrites continuent de parser :
+        // elles sont désormais rangées en qualité de code.
+        "ai-pattern" | "ai" => Category::Quality,
+        "git" | "versioning" => Category::Git,
         "pro-pattern" | "pattern" | "patterns" => Category::Pattern,
-        "reliability" | "bug" | "bugs" => Category::Reliability,
         "testing" | "test" | "tests" => Category::Testing,
+        // Catégories « architecture », « performance » et « reliability »
+        // retirées du produit (il n'en reste plus que 6 : sécurité, qualité,
+        // versioning, pattern, dépendances, tests). Les alias survivent pour
+        // que les règles déjà écrites (dont les .herald embarqués) continuent
+        // de parser sans réécriture en masse.
+        "architecture" => Category::Pattern,
+        "performance" | "perf" => Category::Quality,
+        "reliability" | "bug" | "bugs" => Category::Quality,
         other => return Err(format!("unknown category '{other}'")),
     })
 }

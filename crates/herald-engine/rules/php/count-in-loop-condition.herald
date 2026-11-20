@@ -1,0 +1,25 @@
+# `for ($i = 0; $i < count($rows); $i++)` : la condition est réévaluée à chaque
+# tour, donc `count()`/`strlen()` est appelé n fois au lieu d'une. Sur un
+# tableau PHP `count()` est O(1), mais l'appel de fonction lui-même ne l'est
+# pas — et sur un Countable/ArrayAccess maison, il peut être O(n).
+rule php-count-in-loop-condition {
+  meta {
+    type: quality
+    severity: info
+    message: "count()/strlen() dans la condition de boucle — recalculé à chaque itération ; sors-le dans une variable avant la boucle (ou utilise foreach)"
+  }
+  dedupe line
+  lang php {
+    pattern (for_statement condition: (_) @cond) @match
+    where @cond ~ /\b(count|sizeof|strlen|mb_strlen|iterator_count)\s*\(/
+  }
+
+  tests {
+    php {
+      "<?php for ($i = 0; $i < count($rows); $i++) { echo $i; }"   => fail
+      "<?php for ($i = 0; $i < strlen($s); $i++) { echo $i; }"     => fail
+      "<?php $n = count($rows); for ($i = 0; $i < $n; $i++) { echo $i; }" => pass
+      "<?php foreach ($rows as $row) { echo $row; }"               => pass
+    }
+  }
+}

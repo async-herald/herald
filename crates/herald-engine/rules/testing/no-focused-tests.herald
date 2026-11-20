@@ -1,0 +1,23 @@
+rule no-focused-tests {
+  meta {
+    type: tests
+    severity: error
+    message: "Test focalisé (.only / fdescribe / fit) — laissé en place, il désactive silencieusement tous les autres tests de la suite en CI ; à retirer avant commit"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression function: (_) @callee) @match
+    where @callee ~ /^(?:(?:describe|it|test|context)\s*\.\s*only|f(?:describe|it))$/
+  }
+
+  tests {
+    js {
+      "describe.only('suite', () => {})" => fail
+      "it.only('x', () => {})" => fail
+      "fit('x', () => {})" => fail
+      "describe('suite', () => {})" => pass
+      "render(<p>profit (fit) et benefit</p>)" => pass
+      "track('it.only', { only: true })" => pass
+    }
+  }
+}

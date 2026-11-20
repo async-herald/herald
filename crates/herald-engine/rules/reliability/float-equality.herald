@@ -1,0 +1,32 @@
+rule float-equality {
+  meta {
+    type: quality
+    severity: warning
+    message: "Comparaison directe de flottants — l'arrondi binaire les rend rarement exactement égaux ; compare avec une tolérance (ex: abs(a - b) < epsilon)"
+  }
+  dedupe line
+
+  // Restreint aux littéraux à virgule (0.1, 3.14…) : comparer à un littéral
+  // entier (`x == 1`) est courant et sain, ce n'est un piège que quand une
+  // des deux valeurs est visiblement un flottant.
+  lang js, ts, java, go, rust {
+    pattern (binary_expression) @match
+    where @match ~ /(?:===?|!==?)\s*\d+\.\d+\b|\b\d+\.\d+\s*(?:===?|!==?)/
+      and not @match ~ /NaN/
+  }
+  lang py {
+    pattern (comparison_operator) @match
+    where @match ~ /(?:==|!=)\s*\d+\.\d+\b|\b\d+\.\d+\s*(?:==|!=)/
+  }
+
+  tests {
+    js {
+      "if (x === 0.1) {}" => fail
+      "if (x === 1) {}" => pass
+    }
+    py {
+      "if x == 0.1: pass" => fail
+      "if x == 1: pass" => pass
+    }
+  }
+}

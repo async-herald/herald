@@ -1,6 +1,6 @@
 rule http-no-timeout {
   meta {
-    type: reliability
+    type: quality
     severity: warning
     message: "Appel HTTP sans timeout (reqwest::get) — une réponse lente bloque la tâche indéfiniment ; construis un Client avec .timeout(...) explicite plutôt que le raccourci global"
   }

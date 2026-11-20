@@ -1,8 +1,8 @@
 rule high-complexity {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
-    message: "High cyclomatic complexity ({value} > {threshold}) — simplify or extract helpers"
+    message: "Complexité cyclomatique élevée ({value} > {threshold}) — simplifie la logique ou extrais des fonctions"
   }
   measure complexity > 10 (java 12, go 12, rust 15)
 }

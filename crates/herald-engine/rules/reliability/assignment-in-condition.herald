@@ -1,6 +1,6 @@
 rule assignment-in-condition {
   meta {
-    type: reliability
+    type: quality
     severity: warning
     message: "Affectation dans une condition (if (x = y)) — presque toujours un == oublié ; corrige la comparaison ou sors l'affectation de la condition"
   }

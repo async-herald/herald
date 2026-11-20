@@ -10,7 +10,7 @@ use tree_sitter::Tree;
 
 pub const META: FnRule = FnRule {
     name: "high-coupling",
-    category: Category::Architecture,
+    category: Category::Pattern,
     check,
 };
 
@@ -42,7 +42,7 @@ pub fn check(code: &str, tree: Option<&Tree>, language: Language) -> Vec<Issue> 
     if count > MAX_IMPORTS {
         vec![Issue {
             rule: META.name.to_string(),
-            category: Category::Architecture,
+            category: Category::Pattern,
             severity: Severity::Warning,
             message: format!(
                 "Couplage élevé : {count} imports dans ce module (max conseillé {MAX_IMPORTS}) — envisager de le scinder"

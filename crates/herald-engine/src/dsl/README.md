@@ -44,6 +44,9 @@ rule command_injection [security/error] {
 - `$NAME` is a metavariable: a hole that matches any expression and is captured
   under `NAME` so `when` can talk about it. Concrete tokens (`exec`, `.query`)
   must match literally.
+- **PHP**: `$` is real syntax there, so a metavariable must be **UPPERCASE**.
+  `$Q` is a hole; `$this`, `$_GET`, `$request` are literal code and match
+  themselves. That makes `$DB->query($Q)` read exactly like the code it catches.
 
 ### `when` conditions
 

@@ -1,0 +1,15 @@
+rule commit-too-long {
+  meta {
+    type: git
+    severity: info
+    message: "Sujet de commit trop long (> 72 caractères) — résume en une ligne courte"
+  }
+  commit: /^.{73,}/
+
+  tests {
+    commit {
+      "feat: add a concise subject line" => pass
+      "feat: an extremely long commit subject line that clearly goes way beyond seventy-two chars" => fail
+    }
+  }
+}

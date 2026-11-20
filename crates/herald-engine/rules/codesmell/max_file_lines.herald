@@ -1,8 +1,8 @@
 rule max_file_lines {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
-    message: "File too long ({value} > {threshold} lines) — split it into smaller modules"
+    message: "Fichier trop long ({value} > {threshold} lignes) — découpe-le en modules plus petits"
   }
   measure file_lines > 500
 }

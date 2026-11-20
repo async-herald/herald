@@ -1,6 +1,6 @@
 rule global-mutable-state {
   meta {
-    type: architecture
+    type: pattern
     severity: warning
     message: "État mutable exporté au niveau module — un singleton modifiable partagé crée un couplage caché et des bugs d'ordre d'exécution ; expose une fonction ou un objet en lecture seule"
   }

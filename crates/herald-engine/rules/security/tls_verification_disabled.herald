@@ -2,7 +2,7 @@ rule tls_verification_disabled {
   meta {
     type: security
     severity: error
-    message: "TLS certificate verification disabled — exposes traffic to man-in-the-middle attacks; never disable cert validation in production"
+    message: "Vérification du certificat TLS désactivée — expose le trafic aux attaques de l'homme du milieu ; ne désactive jamais la validation du certificat en production"
   }
   lang js, ts {
     pattern (pair key: [(property_identifier) (string)] @k (#match? @k "rejectUnauthorized") value: (false)) @match

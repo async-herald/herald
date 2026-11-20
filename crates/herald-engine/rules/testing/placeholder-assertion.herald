@@ -1,0 +1,20 @@
+rule placeholder-assertion {
+  meta {
+    type: tests
+    severity: warning
+    message: "Assertion factice (expect(true).toBe(true)) — le test passe sans rien valider ; assertionne la vraie sortie"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /expect\s*\(\s*(?:true|false|1|0)\s*\)\s*\.\s*(?:toBe|toEqual|toStrictEqual)\s*\(\s*(?:true|false|1|0)\s*\)/
+  }
+
+  tests {
+    js {
+      "expect(true).toBe(true)" => fail
+      "expect(1).toEqual(1)" => fail
+      "expect(result).toBe(true)" => pass
+    }
+  }
+}

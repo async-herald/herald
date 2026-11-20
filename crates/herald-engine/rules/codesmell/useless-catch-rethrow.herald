@@ -1,6 +1,6 @@
 rule useless-catch-rethrow {
   meta {
-    type: code-smell
+    type: quality
     severity: info
     message: "catch qui se contente de relancer l'erreur (catch (e) { throw e }) — n'apporte rien ; supprime le try/catch ou ajoute un vrai traitement (log, contexte, nettoyage)"
   }

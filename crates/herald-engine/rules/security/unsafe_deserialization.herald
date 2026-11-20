@@ -2,12 +2,13 @@ rule unsafe_deserialization {
   meta {
     type: security
     severity: error
-    message: "Unsafe deserialization of untrusted data — can execute arbitrary code; use a safe loader (e.g. yaml.safe_load, JSON) and avoid native serialization"
+    message: "Désérialisation non sûre d'une donnée non fiable — peut exécuter du code arbitraire ; utilise un loader sûr (ex. yaml.safe_load, JSON) et évite la sérialisation native"
   }
   match {
     js, ts: unserialize($X)
     py: pickle.loads($X)
     py: yaml.load($X)
+    php: unserialize($X)
   }
 
   tests {
@@ -18,6 +19,10 @@ rule unsafe_deserialization {
       "pickle.loads(data)" => fail
       "yaml.load(stream)" => fail
       "yaml.safe_load(stream)" => pass
+    }
+    php {
+      "<?php $o = unserialize($_COOKIE['session']);" => fail
+      "<?php $o = json_decode($payload, true);"      => pass
     }
   }
 }

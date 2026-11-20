@@ -1,0 +1,21 @@
+rule blocking-sync-crypto {
+  meta {
+    type: quality
+    severity: warning
+    message: "Crypto synchrone bloquant — bcrypt/pbkdf2/scrypt Sync gèlent l'event loop ; utilise la version asynchrone"
+  }
+  match {
+    js, ts: bcrypt.hashSync($A, $B)
+    js, ts: bcrypt.compareSync($A, $B)
+    js, ts: crypto.pbkdf2Sync($A, $B, $C, $D, $E)
+    js, ts: crypto.scryptSync($A, $B, $C)
+  }
+
+  tests {
+    js {
+      "const h = bcrypt.hashSync(pwd, 10)" => fail
+      "const ok = bcrypt.compareSync(pwd, hash)" => fail
+      "const h = await bcrypt.hash(pwd, 10)" => pass
+    }
+  }
+}

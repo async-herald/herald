@@ -1,6 +1,6 @@
 rule feature-envy {
   meta {
-    type: architecture
+    type: pattern
     severity: info
     message: "Chaîne d'accès profonde a.b.c.d.e (feature envy / loi de Déméter) — ce code dépend trop de la structure interne d'autres objets ; déplace la logique près des données ou expose une méthode dédiée"
   }

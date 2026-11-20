@@ -1,0 +1,45 @@
+// Version Herald Desktop. Mesure de référence : 5/8 vrais positifs. Faux
+// positifs retirés : option Rust passée par la configuration (seul `true`
+// littéral compte), contexte SSL créé pour lister les suites (seuls les
+// clients HTTP comptent), doublon sur la même ligne.
+rule tls_verification_disabled {
+  meta {
+    type: security
+    severity: error
+    message: "Vérification du certificat TLS désactivée en dur — expose le trafic à l'homme du milieu ; fournis le certificat de l'autorité (ca) plutôt que de couper la vérification"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (pair key: [(property_identifier) (string)] @k (#match? @k "rejectUnauthorized") value: (false)) @match
+  }
+  lang py {
+    pattern (call) @match
+    where (@match ~ /\bverify\s*=\s*False\b/
+           and @match ~ /^\s*(?:requests|httpx|aiohttp|urllib3|[\w.]*session|[\w.]*client)\s*\.\s*\w+\s*\(|^\s*(?:httpx\s*\.\s*(?:Client|AsyncClient)|requests\s*\.\s*Session)\s*\(/)
+       or @match ~ /^\s*ssl\s*\.\s*_create_unverified_context\s*\(/
+  }
+  lang go {
+    pattern (keyed_element (literal_element (identifier) @k) (#eq? @k "InsecureSkipVerify") (literal_element (identifier) @v) (#eq? @v "true")) @match
+  }
+  lang rust {
+    pattern (call_expression function: (field_expression field: (field_identifier) @fn (#match? @fn "^(danger_accept_invalid_certs|danger_accept_invalid_hostnames)$")) arguments: (arguments (boolean_literal) @v (#eq? @v "true"))) @match
+  }
+
+  tests {
+    js {
+      "const agent = new https.Agent({ rejectUnauthorized: false })" => fail
+      "const agent = new https.Agent({ rejectUnauthorized: true })" => pass
+    }
+    py {
+      "response = requests.get(PACKAGE_INDEX_LINK, verify=False)" => fail
+      "client = httpx.Client(verify=False)" => fail
+      "ctx = ssl._create_unverified_context()" => fail
+      "requests.get(url, verify=True)" => pass
+      "names = cls._create_ssl_context(verify=False).get_ciphers()" => pass
+    }
+    rust {
+      "fn f() { builder.danger_accept_invalid_certs(true); }" => fail
+      "fn f() { builder.danger_accept_invalid_certs(config.accept_invalid_certs); }" => pass
+    }
+  }
+}

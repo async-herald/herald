@@ -1,0 +1,18 @@
+rule dynamic-require {
+  meta {
+    type: security
+    severity: warning
+    message: "Chargement de module dynamique (chemin non littéral) — impossible de vérifier statiquement ce qui est chargé ; si le chemin dépend d'une entrée, c'est une exécution de code arbitraire"
+  }
+  when $PATH is dynamic
+  match js, ts: require($PATH)
+  match js, ts: import($PATH)
+
+  tests {
+    js {
+      "require('./plugins/' + userInput)" => fail
+      "import(\"./\" + moduleName)" => fail
+      "require('./config')" => pass
+    }
+  }
+}

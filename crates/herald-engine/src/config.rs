@@ -39,7 +39,8 @@ impl Default for Thresholds {
     fn default() -> Self {
         Self {
             max_file_lines: 500,
-            max_line_length: 120,
+            // 0 = auto (seuil par langage, voir `long_line::default_max_line_length`).
+            max_line_length: 0,
             max_function_lines: 0,
             max_params: 0,
             max_complexity: 0,

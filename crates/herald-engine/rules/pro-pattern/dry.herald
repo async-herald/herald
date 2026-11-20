@@ -1,0 +1,8 @@
+rule dry {
+  meta {
+    type: pattern
+    severity: warning
+    message: "Violation du principe DRY — bloc de code dupliqué ; factorise la logique répétée dans une fonction ou une abstraction commune"
+  }
+  use ai_duplicate_block
+}

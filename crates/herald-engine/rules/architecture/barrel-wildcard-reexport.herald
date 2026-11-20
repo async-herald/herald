@@ -1,6 +1,6 @@
 rule barrel-wildcard-reexport {
   meta {
-    type: architecture
+    type: pattern
     severity: info
     message: "Ré-export en masse (export * from) — masque le couplage réel et alourdit le graphe de dépendances ; ré-exporte explicitement ce qui est public"
   }

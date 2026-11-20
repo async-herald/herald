@@ -1,0 +1,17 @@
+rule quadratic-loop {
+  meta {
+    type: quality
+    severity: warning
+    message: "Recherche linéaire répétée dans une boucle (O(n²)) — indexe la collection dans un Map/Set pour une recherche en O(1)"
+  }
+  dedupe linecol
+  use quadratic_loop
+
+  tests {
+    js {
+      "for (const x of xs) { if (banned.includes(x)) skip(x) }" => fail
+      "for (const x of xs) { use(x) }" => pass
+      "for (const a of xs) { for (const b of ys) { join(a, b) } }" => pass
+    }
+  }
+}

@@ -10,7 +10,7 @@ use tree_sitter::Tree;
 
 pub const META: FnRule = FnRule {
     name: "deep-relative-import",
-    category: Category::Architecture,
+    category: Category::Pattern,
     check,
 };
 
@@ -32,7 +32,7 @@ pub fn check(code: &str, tree: Option<&Tree>, language: Language) -> Vec<Issue> 
             if deep_re().is_match(text) {
                 vec![Issue {
                     rule: META.name.to_string(),
-                    category: Category::Architecture,
+                    category: Category::Pattern,
                     severity: Severity::Warning,
                     message: format!(
                         "Import relatif profond {text} — franchit plusieurs niveaux ; préférer un alias / point d'entrée de module"

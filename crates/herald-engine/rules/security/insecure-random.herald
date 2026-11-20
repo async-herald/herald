@@ -2,7 +2,7 @@ rule insecure-random {
   meta {
     type: security
     severity: error
-    message: "Insecure randomness: a non-cryptographic RNG generates a security-sensitive value (token, secret, OTP, salt…) — use a CSPRNG instead (crypto.randomBytes / crypto.getRandomValues, secrets / os.urandom, crypto/rand, java.security.SecureRandom, rand::rngs::OsRng)"
+    message: "Aléatoire non sécurisé : un générateur non cryptographique produit une valeur sensible (token, secret, OTP, sel…) — utilise un CSPRNG à la place (crypto.randomBytes / crypto.getRandomValues, secrets / os.urandom, crypto/rand, java.security.SecureRandom, rand::rngs::OsRng)"
   }
   match {
     js, ts: const $NAME = Math.random()

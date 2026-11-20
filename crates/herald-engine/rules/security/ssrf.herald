@@ -2,7 +2,7 @@ rule ssrf {
   meta {
     type: security
     severity: error
-    message: "Possible SSRF: outbound request to a URL built from dynamic input — validate against an allowlist of hosts"
+    message: "SSRF possible : requête sortante vers une URL construite à partir d'une entrée dynamique — valide contre une allowlist d'hôtes"
   }
   match {
     js, ts: fetch($URL)

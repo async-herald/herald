@@ -1,0 +1,46 @@
+// Version Herald Desktop. Mesure de référence : 0/10 vrais positifs (chemins
+// internes, constantes, dossiers temporaires). Ne relève plus qu'un chemin
+// qui contient une entrée de requête.
+rule path-traversal {
+  meta {
+    type: security
+    severity: error
+    message: "Path traversal : un chemin de fichier contient une entrée de requête — normalise-le, vérifie qu'il reste dans le dossier autorisé et rejette les segments '..'"
+  }
+  // L'entrée doit être dans le PREMIER argument (le chemin) : un méta-argument
+  // `$P` suivi d'autres arguments peut s'accrocher au contenu écrit
+  // (`writeFile(absPath, req.body)`, faux positif mesuré).
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\b(?:readFile|readFileSync|writeFile|writeFileSync|appendFile|createReadStream|createWriteStream|unlink|sendFile|download)\s*\(\s*[^,()]*(?:\([^()]*\)[^,()]*)*\b(?:req|request|ctx\.request)\s*\.\s*(?:query|params|body)\b/
+  }
+  lang py {
+    pattern (call) @match
+    where @match ~ /^\s*(?:open|send_file|[\w.]*\.open)\s*\(\s*[^,()]*(?:\([^()]*\)[^,()]*)*\brequest\s*\.\s*(?:args|form|values|GET|POST|files|json)\b/
+  }
+  lang php {
+    pattern [(function_call_expression) (include_expression) (require_expression)] @match
+    where @match ~ /^(?:file_get_contents|file_put_contents|fopen|unlink|readfile|include|include_once|require|require_once)\s*\(?\s*[^,;]*\$_(?:GET|POST|REQUEST|COOKIE|FILES)\b/
+  }
+
+  tests {
+    js {
+      "fs.readFile('/data/' + req.query.name)" => fail
+      "res.sendFile(req.params.file)" => fail
+      "fs.readFile('/etc/app/config.json')" => pass
+      "fs.promises.writeFile(llmsTxtPath, `${lines.join('\\n')}\\n`)" => pass
+      "fs.readFile(filePath, options ?? null)" => pass
+      "await fs.writeFile(absPath, req.body, 'utf-8')" => pass
+    }
+    py {
+      "open('/uploads/' + request.args['filename'])" => fail
+      "open(tdir.name + '/prefs.js', 'w')" => pass
+    }
+    php {
+      "<?php $c = file_get_contents('/uploads/' . $_GET['name']);" => fail
+      "<?php $c = @file_get_contents($path . $mce_locale . '_dlg.js');" => pass
+      "<?php @unlink($delayedJob['job']['filename'] . '~');" => pass
+    }
+  }
+}

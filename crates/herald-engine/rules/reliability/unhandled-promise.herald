@@ -1,6 +1,6 @@
 rule unhandled-promise {
   meta {
-    type: reliability
+    type: quality
     severity: warning
     message: "Promesse non gérée : .then() sans .catch (ni await dans un try/catch) — une rejection non capturée remonte en unhandledRejection et peut faire tomber le process ; ajoute un .catch ou await l'appel"
   }

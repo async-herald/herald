@@ -1,0 +1,29 @@
+# Le service locator (`$container->get(...)`) masque les dépendances réelles
+# d'une classe : rien ne les déclare, rien ne les type, et le conteneur devient
+# une variable globale déguisée. Symfony pousse l'injection par constructeur
+# depuis la 3.3, et `Controller::get()` est déprécié depuis la 4.2.
+#
+# On ne cible QUE les formes explicitement conteneur (`->container->get()`,
+# `->getContainer()->get()`). Un `$this->get('x')` nu serait ambigu : beaucoup
+# de classes métier ont un getter `get()` légitime, et le confondre avec le
+# conteneur produirait des faux positifs.
+rule symfony-service-locator {
+  meta {
+    type: pattern
+    severity: warning
+    message: "Service locator — le conteneur est appelé directement, ce qui cache les dépendances de la classe ; injecte le service dans le constructeur"
+  }
+  match {
+    php: $OBJ->container->get($ID)
+    php: $OBJ->getContainer()->get($ID)
+  }
+
+  tests {
+    php {
+      "<?php $m = $this->container->get('mailer');"        => fail
+      "<?php $m = $this->getContainer()->get(MailerInterface::class);" => fail
+      "<?php public function __construct(private MailerInterface $mailer) {}" => pass
+      "<?php $v = $this->form->get('email');"              => pass
+    }
+  }
+}

@@ -1,0 +1,34 @@
+rule img-missing-alt {
+  meta {
+    type: quality
+    severity: warning
+    message: "<img> sans attribut alt — accessibilité (lecteurs d'écran)"
+  }
+  dedupe line
+
+  # HTML : un élément dont le texte commence par <img et ne contient pas ` alt=`.
+  lang html {
+    pattern (element) @match
+    where @match ~ /(?i)^<img\b/ and not @match ~ /(?i)\salt\s*=/
+  }
+
+  # JSX (React, .js/.jsx) : <img … /> sans attribut alt.
+  lang js {
+    pattern (jsx_self_closing_element name: (identifier) @n (#eq? @n "img")) @match
+    where not @match ~ /(?i)\salt\s*=/
+  }
+
+  tests {
+    html {
+      "<img src='logo.png'>" => fail
+      "<img src='logo.png' />" => fail
+      "<img src='logo.png' alt='Logo'>" => pass
+      "<div>bonjour</div>" => pass
+    }
+    js {
+      "const a = <img src='y.png' />" => fail
+      "const a = <img src='y.png' alt='desc' />" => pass
+      "const b = <div />" => pass
+    }
+  }
+}

@@ -1,0 +1,29 @@
+// Version Herald Desktop. Mesure de référence : 0/10 vrais positifs (zod
+// .extend(), IIFE, héritage X.prototype.__proto__ = Error.prototype). Ne
+// relève plus qu'un merge récursif ou une écriture par chemin alimentés par
+// une entrée de requête.
+rule prototype-pollution {
+  meta {
+    type: security
+    severity: error
+    message: "Prototype pollution : une entrée de requête passe dans un merge récursif ou une écriture par chemin (clé '__proto__' ou 'constructor') — utilise une allowlist de clés ou un objet sans prototype"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\b_\s*\.\s*(?:merge|mergeWith|defaultsDeep|set|setWith)\s*\(|\b(?:deepMerge|deepmerge|mergeDeep|deepExtend|deepAssign|setPath|dset)\s*\(|\$\s*\.\s*extend\s*\(\s*true\s*,/
+      and @match ~ /\b(?:req|request|ctx\.request)\s*\.\s*(?:body|query|params)\b/
+  }
+
+  tests {
+    js {
+      "_.merge(config, req.body)" => fail
+      "_.set(settings, req.query.path, req.query.value)" => fail
+      "$.extend(true, defaults, req.body)" => fail
+      "const s = basePropertiesSchema.extend({ type: z.literal('json') })" => pass
+      "AuthenticationError.prototype.__proto__ = Error.prototype" => pass
+      "_.merge({}, defaults, options)" => pass
+      "Object.assign(target, req.body)" => pass
+    }
+  }
+}

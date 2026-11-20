@@ -2,12 +2,17 @@ rule path-traversal {
   meta {
     type: security
     severity: error
-    message: "Possible path traversal: a filesystem path is built from dynamic input — canonicalize it and confine it to an allowed base directory, rejecting '..' segments"
+    message: "Path traversal possible : un chemin de fichier est construit à partir d'une entrée dynamique — canonicalise-le et confine-le à un dossier de base autorisé, en rejetant les segments '..'"
   }
   match {
     js, ts: $FS.readFile($P)
     js, ts: $FS.writeFile($P)
     py: open($P)
+    php: file_get_contents($P)
+    php: file_put_contents($P, $DATA)
+    php: fopen($P, $MODE)
+    php: unlink($P)
+    php: readfile($P)
   }
   when $P is dynamic
 
@@ -20,6 +25,11 @@ rule path-traversal {
     py {
       "open('/uploads/' + filename)" => fail
       "open('/etc/app/config.json')" => pass
+    }
+    php {
+      "<?php $c = file_get_contents('/uploads/' . $name);" => fail
+      "<?php unlink(\"/tmp/$id.txt\");"                    => fail
+      "<?php $c = file_get_contents('/etc/app/config.json');" => pass
     }
   }
 }

@@ -1,8 +1,8 @@
 rule function-too-long {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
-    message: "Function too long ({value} > {threshold} lines) — split it into smaller, focused functions"
+    message: "Fonction trop longue ({value} > {threshold} lignes) — découpe-la en fonctions plus petites et ciblées"
   }
-  measure function_lines > 50 (java 70, go 60, rust 60)
+  measure function_lines > 50 (java 70, go 60, rust 60, php 60)
 }

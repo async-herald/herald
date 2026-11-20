@@ -1,0 +1,16 @@
+rule merge-conflict {
+  meta {
+    type: git
+    severity: error
+    message: "Marqueur de conflit de merge laissé dans le code"
+  }
+  use merge_conflict
+
+  tests {
+    js {
+      "<<<<<<< HEAD" => fail
+      ">>>>>>> feature/x" => fail
+      "const x = 1" => pass
+    }
+  }
+}

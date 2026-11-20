@@ -1,6 +1,6 @@
 rule deep-relative-import {
   meta {
-    type: architecture
+    type: pattern
     severity: warning
     message: "Import relatif profond (../../../) — franchit plusieurs niveaux de module"
   }

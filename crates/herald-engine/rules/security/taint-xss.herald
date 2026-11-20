@@ -2,6 +2,7 @@ rule taint-xss {
   meta {
     type: security
     severity: error
+    message: "XSS : une entrée non fiable atteint innerHTML/document.write — injection de script dans la page ; utilise textContent ou échappe/assainis (DOMPurify)"
   }
   use taint_xss
 }

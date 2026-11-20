@@ -11,9 +11,9 @@ pub fn check(code: &str, max: usize) -> Vec<Issue> {
 
     vec![Issue {
         rule: NAME.to_string(),
-        category: Category::CodeSmell,
+        category: Category::Quality,
         severity: Severity::Warning,
-        message: format!("File too long: {lines} lines (max {max})"),
+        message: format!("Fichier trop long : {lines} lignes (max {max}) — découpe-le en modules plus petits"),
         line: 1,
         column: 1,
     }]

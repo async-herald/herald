@@ -1,0 +1,46 @@
+// Règle « MVC » : regroupe plusieurs sous-règles de séparation des couches.
+// Toutes partagent un seul message (limite du moteur : 1 message par règle).
+rule mvc {
+  meta {
+    type: pattern
+    severity: info
+    message: "Mélange des couches MVC — persistance ou présentation dans la logique applicative ; isole l'accès aux données (modèle) et le rendu (vue) hors du contrôleur"
+  }
+  dedupe line
+
+  // Données — requête SQL en clair (devrait vivre dans un modèle/repository)
+  lang js, ts {
+    pattern (string) @match
+      (template_string) @match
+    where @match ~ /(?i)\b(?:insert\s+into\s+\w+|update\s+\w+\s+set\b|delete\s+from\s+\w+|select\b.{1,120}\bfrom\b.{1,120}\bwhere\b)/
+  }
+  lang py {
+    pattern (string) @match
+    where @match ~ /(?i)\b(?:insert\s+into\s+\w+|update\s+\w+\s+set\b|delete\s+from\s+\w+|select\b.{1,120}\bfrom\b.{1,120}\bwhere\b)/
+  }
+
+  // Présentation — balisage HTML en dur dans le code
+  lang js, ts {
+    pattern (string) @match
+      (template_string) @match
+    where @match ~ /(?i)<\/?(?:div|span|table|tr|td|ul|li|section|article|button|input|form|h[1-6])\b/
+  }
+
+  // Présentation — écriture directe du DOM depuis la logique
+  match {
+    js, ts: $X.innerHTML = $Y
+  }
+
+  tests {
+    js {
+      "const q = 'INSERT INTO users (name) VALUES (?)'" => fail
+      "const html = '<section>hi</section>'" => fail
+      "el.innerHTML = render()" => fail
+      "const label = 'Insert your name'" => pass
+    }
+    py {
+      "q = 'DELETE FROM sessions WHERE id = %s'" => fail
+      "msg = 'select an option from the menu'" => pass
+    }
+  }
+}

@@ -6,4 +6,8 @@
 
 pub mod architecture;
 pub mod codesmell;
+pub mod devops;
+pub mod git;
+pub mod performance;
 pub mod security;
+pub mod testing;

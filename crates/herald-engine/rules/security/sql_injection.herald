@@ -2,11 +2,16 @@ rule sql_injection {
   meta {
     type: security
     severity: error
-    message: "Possible SQL injection: query built by string concat/interpolation — use parameterized queries"
+    message: "Injection SQL possible : requête construite par concaténation/interpolation de chaîne — utilise des requêtes paramétrées"
   }
   match {
     js, ts: $DB.query($Q)
     py: $CUR.execute($Q)
+    php: $DB->query($Q)
+    php: $DB->exec($Q)
+    php: $DB->executeQuery($Q)
+    php: mysqli_query($CONN, $Q)
+    php: pg_query($CONN, $Q)
   }
   when $Q is dynamic
 
@@ -19,6 +24,13 @@ rule sql_injection {
     py {
       "cur.execute('SELECT * FROM t WHERE id = ' + uid)" => fail
       "cur.execute('SELECT * FROM t WHERE id = %s', [uid])" => pass
+    }
+    php {
+      "<?php $db->query('SELECT * FROM users WHERE id = ' . $id);"  => fail
+      "<?php $conn->exec(\"DELETE FROM t WHERE x = $x\");"          => fail
+      "<?php mysqli_query($conn, \"SELECT * FROM t WHERE id = $id\");" => fail
+      "<?php $db->query('SELECT * FROM users');"                    => pass
+      "<?php $stmt = $db->prepare('SELECT * FROM t WHERE id = :id');" => pass
     }
   }
 }

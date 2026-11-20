@@ -1,0 +1,46 @@
+// Version Herald Desktop. Mesure de référence : 1/10 vrais positifs (scripts
+// de build, constantes, escapeshellarg). Ne relève plus qu'une commande
+// construite avec une entrée de requête.
+rule command_injection {
+  meta {
+    type: security
+    severity: error
+    message: "Injection de commande : une entrée de requête est insérée dans une commande shell — passe les arguments en liste sans shell (execFile / subprocess.run([...])) ou échappe-les (escapeshellarg)"
+  }
+  match {
+    js, ts: exec($ARG)
+    js, ts: execSync($ARG)
+    js, ts: $CP.exec($ARG)
+    js, ts: $CP.execSync($ARG)
+    py:     os.system($ARG)
+    py:     os.popen($ARG)
+    php:    exec($ARG)
+    php:    shell_exec($ARG)
+    php:    system($ARG)
+    php:    passthru($ARG)
+    php:    proc_open($ARG, $SPEC, $PIPES)
+    php:    popen($ARG, $MODE)
+  }
+  when $ARG is dynamic and $ARG is user-input
+
+  tests {
+    js {
+      "exec('convert ' + req.query.file)" => fail
+      "child_process.exec(`ping ${req.body.host}`)" => fail
+      "exec(`git log --pretty=format:%s ${commitHash}...master`)" => pass
+      "exec('npm install ' + installArgs, opts)" => pass
+      "exec('ls -la')" => pass
+    }
+    py {
+      "os.system('rm ' + request.args.get('path'))" => fail
+      "os.system('rm -rf /tmp/cache')" => pass
+      "os.system('rm ' + path)" => pass
+    }
+    php {
+      "<?php shell_exec('ls ' . $_GET['dir']);" => fail
+      "<?php exec('which ' . $candidate);" => pass
+      "<?php exec(\"mklink /{$mode} \" . escapeshellarg($link));" => pass
+      "<?php $m = shell_exec('kstat -p d ' . $key);" => pass
+    }
+  }
+}

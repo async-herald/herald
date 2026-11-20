@@ -28,9 +28,54 @@ pub struct FileInput {
     pub code: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+/// Note à 13 paliers (A+ à F) plutôt que 5 lettres brutes — un score qui
+/// stagne à 92 restait invisible tant qu'il ne franchissait pas 90 puis 100 ;
+/// les +/- rendent la progression lisible dans cet intervalle. `F` reste sans
+/// subdivision : en dessous de 40, l'écart entre les repos ne mérite pas plus
+/// de granularité que "à revoir en profondeur".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Grade {
-    A, B, C, D, F,
+    #[serde(rename = "A+")]
+    APlus,
+    A,
+    #[serde(rename = "A-")]
+    AMinus,
+    #[serde(rename = "B+")]
+    BPlus,
+    B,
+    #[serde(rename = "B-")]
+    BMinus,
+    #[serde(rename = "C+")]
+    CPlus,
+    C,
+    #[serde(rename = "C-")]
+    CMinus,
+    #[serde(rename = "D+")]
+    DPlus,
+    D,
+    #[serde(rename = "D-")]
+    DMinus,
+    F,
+}
+
+impl Grade {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::APlus => "A+",
+            Self::A => "A",
+            Self::AMinus => "A-",
+            Self::BPlus => "B+",
+            Self::B => "B",
+            Self::BMinus => "B-",
+            Self::CPlus => "C+",
+            Self::C => "C",
+            Self::CMinus => "C-",
+            Self::DPlus => "D+",
+            Self::D => "D",
+            Self::DMinus => "D-",
+            Self::F => "F",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -54,8 +99,13 @@ pub struct AnalyzeRequest {
 pub struct GitContext {
     #[serde(default)]
     pub branch: Option<String>,
+    /// Sujets des derniers commits (les plus récents d'abord). Chacun est
+    /// évalué contre les règles `commit:` ; les correspondances sont
+    /// dédupliquées par règle (voir `analyze()`) pour qu'un dépôt à
+    /// l'historique répétitif (ex. 20 commits "wip") ne pénalise pas plus
+    /// qu'un dépôt avec un seul commit fautif.
     #[serde(default)]
-    pub commit: Option<String>,
+    pub commits: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]

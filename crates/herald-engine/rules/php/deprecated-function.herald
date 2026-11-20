@@ -1,0 +1,49 @@
+# Fonctions dépréciées ou supprimées du langage. On les cible par appel
+# (`nom(...)`) plutôt que par regex sur les identifiants : une chaîne 'each' ou
+# une méthode `$obj->split()` ne doit pas être flaguée.
+#
+# Sources : ext/mysql supprimé en PHP 7.0, ereg/split/create_function supprimés
+# en 7.0-8.0, money_format en 8.0, strftime/date_sunrise/utf8_encode dépréciés
+# en 8.1-8.2.
+rule php-deprecated-function {
+  meta {
+    type: quality
+    severity: warning
+    message: "Fonction PHP dépréciée ou supprimée — casse à la prochaine montée de version ; remplace-la par son équivalent moderne (PDO/mysqli, preg_*, IntlDateFormatter, mb_convert_encoding, closure)"
+  }
+  match {
+    php: create_function($ARGS, $BODY)
+    php: each($A)
+    php: ereg($P, $S)
+    php: eregi($P, $S)
+    php: ereg_replace($P, $R)
+    php: split($P, $S)
+    php: spliti($P, $S)
+    php: mysql_query($Q)
+    php: mysql_connect($H)
+    php: mysql_fetch_array($R)
+    php: mysql_real_escape_string($S)
+    php: utf8_encode($S)
+    php: utf8_decode($S)
+    php: strftime($F)
+    php: gmstrftime($F)
+    php: date_sunrise($T)
+    php: date_sunset($T)
+    php: money_format($F, $N)
+    php: get_magic_quotes_gpc()
+    php: filter_var($V, FILTER_SANITIZE_STRING)
+  }
+
+  tests {
+    php {
+      "<?php $r = mysql_query('SELECT 1');"            => fail
+      "<?php $parts = split(',', $line);"              => fail
+      "<?php $s = utf8_encode($raw);"                  => fail
+      "<?php $d = strftime('%Y', $ts);"                => fail
+      "<?php $c = filter_var($s, FILTER_SANITIZE_STRING);" => fail
+      "<?php $parts = explode(',', $line);"            => pass
+      "<?php $c = filter_var($s, FILTER_VALIDATE_EMAIL);" => pass
+      "<?php $r = $conn->executeQuery('SELECT 1');"    => pass
+    }
+  }
+}

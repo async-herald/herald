@@ -8,7 +8,7 @@ use crate::types::{FnRule, Issue, Severity};
 
 pub const META: FnRule = FnRule {
     name: "empty-catch",
-    category: Category::CodeSmell,
+    category: Category::Quality,
     check,
 };
 
@@ -54,9 +54,9 @@ fn walk(node: Node, language: Language, catch: &str, out: &mut Vec<Issue>) {
                 let p = node.start_position();
                 out.push(Issue {
                     rule: META.name.to_string(),
-                    category: Category::CodeSmell,
+                    category: Category::Quality,
                     severity: Severity::Warning,
-                    message: "Empty catch block — the error is swallowed silently; log it, handle it, or rethrow".to_string(),
+                    message: "Bloc catch vide — l'erreur est avalée silencieusement ; logge-la ou relance-la".to_string(),
                     line: p.row + 1,
                     column: p.column + 1,
                 });

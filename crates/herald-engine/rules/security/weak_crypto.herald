@@ -2,7 +2,7 @@ rule weak_crypto {
   meta {
     type: security
     severity: error
-    message: "Weak/obsolete crypto (MD5, SHA-1, DES, RC4) — prefer SHA-256+/AES"
+    message: "Crypto faible/obsolète (MD5, SHA-1, DES, RC4) — préfère SHA-256+/AES"
   }
   match {
     : /(?i)\b(md[245]|sha-?1|rc[24]|3des|tripledes|blowfish)\b/

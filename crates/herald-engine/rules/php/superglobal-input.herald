@@ -1,0 +1,24 @@
+# `$_SERVER` est volontairement absent : il sert aussi à lire des données non
+# contrôlées par le client (SCRIPT_NAME, REQUEST_TIME), et le flaguer en bloc
+# ferait du bruit.
+rule php-superglobal-input {
+  meta {
+    type: security
+    severity: warning
+    message: "Entrée lue directement dans une superglobale — non filtrée et non testable ; passe par l'objet Request (Symfony) ou par filter_input() avec un filtre explicite"
+  }
+  dedupe linecol
+  match {
+    php: /^_(GET|POST|REQUEST|COOKIE|FILES)$/
+  }
+
+  tests {
+    php {
+      "<?php $id = $_GET['id'];"                     => fail
+      "<?php $name = $_POST['name'];"                => fail
+      "<?php $f = $_FILES['avatar'];"                => fail
+      "<?php $id = $request->query->get('id');"      => pass
+      "<?php $t = $_SERVER['REQUEST_TIME'];"         => pass
+    }
+  }
+}

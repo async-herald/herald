@@ -1,0 +1,17 @@
+rule json-deep-clone {
+  meta {
+    type: quality
+    severity: info
+    message: "Clone profond via JSON — lent et perd les types ; préfère structuredClone()"
+  }
+  match {
+    js, ts: JSON.parse(JSON.stringify($X))
+  }
+
+  tests {
+    js {
+      "const c = JSON.parse(JSON.stringify(obj))" => fail
+      "const c = structuredClone(obj)" => pass
+    }
+  }
+}

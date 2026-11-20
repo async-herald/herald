@@ -1,0 +1,37 @@
+rule empty-check-idiom {
+  meta {
+    type: quality
+    severity: info
+    message: "Test de vacuité via .size()/.length/.count == 0 — utilise .isEmpty()/.empty() (clair, parfois O(1) au lieu de O(n))"
+  }
+  match {
+    java:   $X.size() == 0
+    java:   $X.length == 0
+    csharp: $X.Count == 0
+    csharp: $X.Length == 0
+    cpp:    $X.size() == 0
+    dart:   $X.length == 0
+    kotlin: $X.size == 0
+  }
+
+  tests {
+    java {
+      "class C { void m() { if (list.size() == 0) {} } }" => fail
+      "class C { void m() { if (list.isEmpty()) {} } }" => pass
+    }
+    csharp {
+      "class C { void M() { if (items.Count == 0) {} } }" => fail
+    }
+    cpp {
+      "void m() { if (v.size() == 0) {} }" => fail
+      "void m() { if (v.empty()) {} }" => pass
+    }
+    dart {
+      "void f() { if (a.length == 0) {} }" => fail
+      "void f() { if (a.isEmpty) {} }" => pass
+    }
+    kotlin {
+      "fun f() { if (a.size == 0) {} }" => fail
+    }
+  }
+}

@@ -1,7 +1,8 @@
 rule unused-import {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
+    message: "Import jamais utilisé dans le fichier — supprime-le"
   }
   use unused_import
 }

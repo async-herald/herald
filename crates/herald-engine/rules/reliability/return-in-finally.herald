@@ -1,6 +1,6 @@
 rule return-in-finally {
   meta {
-    type: reliability
+    type: quality
     severity: warning
     message: "return/throw/break dans un finally — écrase la valeur ou l'exception du try/catch et masque les erreurs ; sors ce flux de contrôle du finally"
   }

@@ -1,7 +1,8 @@
 rule todo_fixme {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
+    message: "Marqueur TODO/FIXME laissé dans un commentaire — traite-le ou ouvre un ticket de suivi"
   }
   use todo_fixme
 

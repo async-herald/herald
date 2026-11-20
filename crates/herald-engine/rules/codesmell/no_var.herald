@@ -1,8 +1,8 @@
 rule no_var {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
-    message: "Avoid `var`, use `let` or `const` instead"
+    message: "Évite `var` — utilise `let` ou `const` à la place"
   }
   match {
     js, ts: var $X = $V

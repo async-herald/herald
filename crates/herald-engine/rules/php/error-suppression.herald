@@ -1,0 +1,19 @@
+rule php-error-suppression {
+  meta {
+    type: quality
+    severity: warning
+    message: "Opérateur @ — l'erreur est masquée, pas traitée : l'exécution continue avec une valeur invalide et rien n'est journalisé ; teste la valeur de retour ou attrape l'exception"
+  }
+  dedupe linecol
+  lang php {
+    pattern (error_suppression_expression) @match
+  }
+
+  tests {
+    php {
+      "<?php $c = @file_get_contents($path);"  => fail
+      "<?php $v = @$row['maybe'];"             => fail
+      "<?php $c = file_get_contents($path); if ($c === false) { return null; }" => pass
+    }
+  }
+}

@@ -2,12 +2,18 @@ rule command_injection {
   meta {
     type: security
     severity: error
-    message: "Possible command injection: shell command built from dynamic input — pass args as a list / validate input, avoid the shell"
+    message: "Injection de commande possible : commande shell construite à partir d'une entrée dynamique — passe les arguments en liste / valide l'entrée, évite le shell"
   }
 
   match {
     js, ts: exec($ARG)
     py:     os.system($ARG)
+    php:    exec($ARG)
+    php:    shell_exec($ARG)
+    php:    system($ARG)
+    php:    passthru($ARG)
+    php:    proc_open($ARG)
+    php:    popen($ARG)
   }
   when $ARG is dynamic
 
@@ -19,6 +25,11 @@ rule command_injection {
     py {
       "os.system('rm ' + path)"        => fail
       "os.system('rm -rf /tmp/cache')" => pass
+    }
+    php {
+      "<?php shell_exec('ls ' . $dir);"      => fail
+      "<?php system(\"rm -rf $path\");"      => fail
+      "<?php exec('git status');"            => pass
     }
   }
 }

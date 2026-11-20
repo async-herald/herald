@@ -1,0 +1,44 @@
+# Vérifications à chaque push sur main et à chaque pull request : format,
+# clippy et tests de tout le workspace (moteur, CLI, app de bureau), sur macOS
+# (GPUI compile ses shaders Metal avec Xcode). Aucun secret.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Code
+        uses: actions/checkout@v4
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        # Moteur et CLI : pas encore passés à rustfmt.
+        run: cargo fmt -p async-herald-desktop --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked
+
+      - name: Tests
+        run: cargo test --workspace --locked

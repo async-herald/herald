@@ -1,6 +1,6 @@
 rule else-after-return {
   meta {
-    type: code-smell
+    type: quality
     severity: info
     message: "else après un return — le bloc else est superflu puisque le if sort déjà ; dé-indente le code qui suit pour réduire l'imbrication"
   }
@@ -9,11 +9,20 @@ rule else-after-return {
     pattern (if_statement) @match
     where @match ~ /\breturn\b[\s\S]*?\}\s*else\b/
   }
+  lang php {
+    pattern (if_statement) @match
+    where @match ~ /\breturn\b[\s\S]*?\}\s*else(if)?\b/
+  }
 
   tests {
     js {
       "if (x) { return 1 } else { return 2 }" => fail
       "if (x) { doThing() } else { other() }" => pass
+    }
+    php {
+      "<?php if ($x) { return 1; } else { return 2; }"  => fail
+      "<?php if ($x) { return 1; } elseif ($y) { return 2; }" => fail
+      "<?php if ($x) { doThing(); } else { other(); }"  => pass
     }
   }
 }

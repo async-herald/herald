@@ -41,7 +41,6 @@ fn builtin_sources() -> Vec<&'static str> {
     v.into_iter().map(|(_, s)| s).collect()
 }
 
-
 /// When a rule applies to a given file — precomputed once so `run_all` can skip
 /// irrelevant rules without entering the interpreter.
 enum Applies {
@@ -182,6 +181,32 @@ pub fn run_source(source: &str, code: &str, language: Language) -> Result<Vec<Is
     Ok(eval::run(&rule, code, tree.as_ref(), Some(language)))
 }
 
+/// Métadonnées d'une règle (id, catégorie, sévérité, message) extraites de sa
+/// source `.herald`. Valide la source d'une règle personnalisée et dénormalise
+/// ses champs sans dupliquer le parseur ailleurs. `Err(msg)` si la source ne
+/// parse pas — le message est celui du parseur.
+pub struct RuleMeta {
+    pub id: String,
+    pub category: String,
+    pub severity: String,
+    pub message: String,
+}
+
+pub fn parse_meta(source: &str) -> Result<RuleMeta, String> {
+    let rule = parser::parse_rule(source)?;
+    let severity = match rule.severity {
+        crate::types::Severity::Error => "error",
+        crate::types::Severity::Warning => "warning",
+        crate::types::Severity::Info => "info",
+    };
+    Ok(RuleMeta {
+        id: rule.id,
+        category: rule.category.name().to_string(),
+        severity: severity.to_string(),
+        message: rule.message,
+    })
+}
+
 /// Raw `.herald` source of a built-in (official) rule, by id.
 pub fn builtin_source(id: &str) -> Option<&'static str> {
     builtin_rules().into_iter().find(|r| r.id == id).map(|r| r.source)
@@ -274,6 +299,7 @@ pub struct BuiltinRule {
     pub id: String,
     pub category: &'static str,
     pub severity: &'static str,
+    pub message: String,
     pub source: &'static str,
 }
 
@@ -292,6 +318,7 @@ pub fn builtin_rules() -> Vec<BuiltinRule> {
                     Severity::Warning => "warning",
                     Severity::Info => "info",
                 },
+                message: r.message,
                 source: src,
             })
         })

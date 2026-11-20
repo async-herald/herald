@@ -105,23 +105,30 @@ fn detect_cycles(
         if scc.len() < 2 {
             continue;
         }
+        // Un seul relevé par cycle plutôt qu'un par fichier membre — sinon un
+        // cycle de N fichiers (fréquent en Python : `__init__.py` qui
+        // ré-exporte des sous-modules qui s'importent entre eux, un pattern
+        // délibéré et sans bug) produit N warnings pour un seul problème réel
+        // (ex: 20 warnings sur Flask pour un unique cycle). Le fichier
+        // représentatif est le premier par ordre alphabétique de chemin —
+        // déterministe, indépendant de l'ordre de traversée du dépôt.
         let members: HashSet<usize> = scc.iter().copied().collect();
-        for &v in &scc {
-            let line = edge_line_into(&nodes[v], &members, file_set, path_to_idx);
-            let others: Vec<&str> = scc
-                .iter()
-                .filter(|&&u| u != v)
-                .map(|&u| filename(&nodes[u].path))
-                .collect();
-            push(out, &nodes[v].path, Issue {
-                rule: "import-cycle".into(),
-                category: Category::Architecture,
-                severity: Severity::Warning,
-                message: format!("Cycle d'imports ({} fichiers : {})", scc.len(), others.join(", ")),
-                line,
-                column: 1,
-            });
-        }
+        let v = *scc.iter().min_by_key(|&&i| nodes[i].path.as_str()).expect("scc non vide");
+
+        let line = edge_line_into(&nodes[v], &members, file_set, path_to_idx);
+        let others: Vec<&str> = scc
+            .iter()
+            .filter(|&&u| u != v)
+            .map(|&u| filename(&nodes[u].path))
+            .collect();
+        push(out, &nodes[v].path, Issue {
+            rule: "import-cycle".into(),
+            category: Category::Pattern,
+            severity: Severity::Warning,
+            message: format!("Cycle d'imports ({} fichiers : {})", scc.len(), others.join(", ")),
+            line,
+            column: 1,
+        });
     }
 }
 
@@ -134,7 +141,7 @@ fn detect_orphans(nodes: &[Node], indeg: &[usize], out: &mut HashMap<String, Vec
         let line = n.sym.exports.first().map(|(_, l)| *l).unwrap_or(1);
         push(out, &n.path, Issue {
             rule: "orphan-module".into(),
-            category: Category::CodeSmell,
+            category: Category::Quality,
             severity: Severity::Info,
             message: "Module jamais importé (code potentiellement mort)".into(),
             line,
@@ -165,7 +172,7 @@ fn detect_unused_exports(
             }
             push(out, &n.path, Issue {
                 rule: "unused-export".into(),
-                category: Category::CodeSmell,
+                category: Category::Quality,
                 severity: Severity::Info,
                 message: format!("Export `{name}` jamais importé ailleurs"),
                 line: *line,

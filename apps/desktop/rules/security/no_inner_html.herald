@@ -1,0 +1,28 @@
+// Version Herald Desktop. Mesure de référence : 0/10 vrais positifs
+// (gabarits internes, chaînes traduites, valeurs échappées). Ne relève plus
+// qu'une entrée de requête ou d'URL insérée en HTML.
+rule no_inner_html {
+  meta {
+    type: security
+    severity: error
+    message: "XSS : une entrée non fiable (requête, URL de la page) est insérée en HTML via innerHTML/outerHTML — utilise textContent ou assainis-la (DOMPurify)"
+  }
+  match {
+    js, ts: $EL.innerHTML = $VAL
+    js, ts: $EL.outerHTML = $VAL
+    js, ts: $EL.insertAdjacentHTML($POS, $VAL)
+  }
+  when $VAL is user-input or $VAL matches /\blocation\s*\.\s*(?:search|hash|href)\b|\bdocument\s*\.\s*(?:URL|referrer|cookie)\b|URLSearchParams/
+
+  tests {
+    js {
+      "el.innerHTML = '<b>' + location.hash.slice(1) + '</b>'" => fail
+      "el.innerHTML = `Hi ${new URLSearchParams(location.search).get('name')}`" => fail
+      "res.innerHTML = req.query.html" => fail
+      "el.innerHTML = '<hr>'" => pass
+      "template.innerHTML = `<section id=\"${panelId}\" aria-labelledby=\"${headingId}\">`" => pass
+      "decoder.innerHTML = `<div foo=\"${raw.replace(/\"/g, '&quot;')}\">`" => pass
+      "shimContainer.innerHTML = ''" => pass
+    }
+  }
+}

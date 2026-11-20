@@ -2,6 +2,7 @@ rule xxe {
   meta {
     type: security
     severity: error
+    message: "XXE possible : un parseur XML est créé sans désactiver les DTD / entités externes — désactive la résolution du doctype et des entités externes (ou utilise un parseur durci/defused)"
   }
   use xxe
 }

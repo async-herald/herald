@@ -2,6 +2,7 @@ rule taint-code-injection {
   meta {
     type: security
     severity: error
+    message: "Injection de code : une entrée non fiable atteint eval/Function/exec — exécution de code arbitraire ; n'évalue jamais d'entrée, utilise un parseur (JSON.parse) ou une table de dispatch"
   }
   use taint_code_injection
 }

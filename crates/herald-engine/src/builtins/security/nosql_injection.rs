@@ -14,7 +14,7 @@ pub const META: FnRule = FnRule {
     check,
 };
 
-const MSG: &str = "Possible NoSQL injection: untrusted input reaches a query filter or a $where/$function operator — validate and cast input, never pass req.body/query objects straight into the filter";
+const MSG: &str = "Injection NoSQL possible : une entrée non fiable atteint un filtre de requête ou un opérateur $where/$function — valide et caste l'entrée, ne passe jamais req.body/query directement dans le filtre";
 
 const WHERE_JS: &str = r#"(pair key: [(string) (property_identifier)] @k (#match? @k "[$]where|[$]function|[$]accumulator") value: [(template_string (template_substitution)) (binary_expression)]) @match"#;
 const WHERE_PY: &str = r#"(pair key: (string) @k (#match? @k "[$]where|[$]function|[$]accumulator") value: [(string (interpolation)) (binary_operator)]) @match"#;

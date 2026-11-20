@@ -2,13 +2,14 @@ rule no_eval {
   meta {
     type: security
     severity: error
-    message: "Avoid eval()/exec(): executes arbitrary code, major security risk"
+    message: "Évite eval()/exec() — exécute du code arbitraire, risque de sécurité majeur"
   }
 
   match {
     js, ts: eval($X)
     py:     eval($X)
     py:     exec($X)
+    php:    eval($X)
   }
 
   tests {
@@ -20,6 +21,10 @@ rule no_eval {
     py {
       "eval(data)" => fail
       "exec(code)" => fail
+    }
+    php {
+      "<?php eval($code);"        => fail
+      "<?php $r = evaluate($x);"  => pass
     }
   }
 }

@@ -6,9 +6,8 @@ des règles** `.herald`.
 ## Ajouter une règle
 
 1. Crée un fichier dans `crates/herald-engine/rules/<catégorie>/<id>.herald`.
-   Catégories du dépôt open source : `security`, `architecture`, `codesmell`,
-   `reliability`. (Les catégories `ai`, `performance`, `testing`, `pro-pattern`,
-   `git` sont réservées au produit hébergé.)
+   Catégories : `security`, `architecture`, `codesmell`, `reliability`,
+   `performance`, `testing`, `pro-pattern`, `git`, `php`.
 2. Décris la **forme** du code à détecter et affine avec des conditions `when` /
    `where`. La grammaire complète est dans
    [`crates/herald-engine/src/dsl/README.md`](crates/herald-engine/src/dsl/README.md).

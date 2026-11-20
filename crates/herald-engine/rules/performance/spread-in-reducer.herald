@@ -1,0 +1,19 @@
+rule spread-in-reducer {
+  meta {
+    type: quality
+    severity: warning
+    message: "Spread de l'accumulateur dans un reduce ({...acc}) — recopie tout l'accumulateur à chaque itération → O(n²) ; mute l'accumulateur (push / acc[k] = v) ou Object.assign"
+  }
+  dedupe line
+  lang js, ts {
+    pattern (call_expression) @match
+    where @match ~ /\.reduce\s*\([\s\S]*?(?:\{\s*\.\.\.|\[\s*\.\.\.)/
+  }
+
+  tests {
+    js {
+      "items.reduce((acc, x) => ({ ...acc, [x.id]: x }), {})" => fail
+      "items.reduce((a, x) => a + x, 0)" => pass
+    }
+  }
+}

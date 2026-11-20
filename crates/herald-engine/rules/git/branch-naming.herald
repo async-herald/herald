@@ -1,0 +1,18 @@
+rule branch-naming {
+  meta {
+    type: git
+    severity: warning
+    message: "Nom de branche hors convention — utilise feature/, fix/, hotfix/, release/ (gitflow)"
+  }
+  branch not: /^(main|master|develop|(feature|fix|hotfix|release|chore|docs)\/.+)$/
+
+  tests {
+    branch {
+      "feature/login" => pass
+      "hotfix/crash" => pass
+      "main" => pass
+      "johns-random-branch" => fail
+      "test" => fail
+    }
+  }
+}

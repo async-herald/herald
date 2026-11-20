@@ -2,7 +2,7 @@ rule insecure-jwt {
   meta {
     type: security
     severity: error
-    message: "Insecure JWT: signature verification is disabled or the 'none' algorithm is allowed — always verify with a fixed, strong algorithm (e.g. HS256/RS256) and reject unsigned tokens"
+    message: "JWT non sécurisé : la vérification de signature est désactivée ou l'algorithme 'none' est autorisé — vérifie toujours avec un algorithme fixe et robuste (ex. HS256/RS256) et rejette les tokens non signés"
   }
   dedupe line
   where @match ~ /(?i)\bjwt|jsonwebtoken|jose\b|\bjwts\b|jwt\.|pyjwt/

@@ -1,0 +1,11 @@
+# Complément du cyclomatique : celui-ci compte les chemins, celui-là mesure
+# l'effort de lecture. Une fonction plate avec 12 `if` indépendants passe ;
+# trois boucles imbriquées avec des conditions dedans ne passent pas.
+rule high-cognitive-complexity {
+  meta {
+    type: quality
+    severity: warning
+    message: "Complexité cognitive élevée ({value} > {threshold}) — le flux est difficile à suivre ; aplatis l'imbrication avec des clauses de garde et extrais les branches"
+  }
+  measure cognitive > 15
+}

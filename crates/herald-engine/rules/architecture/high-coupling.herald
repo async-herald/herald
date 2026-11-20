@@ -1,7 +1,10 @@
 rule high-coupling {
   meta {
-    type: architecture
-    severity: warning
+    type: pattern
+    // info, pas warning : un nombre d'imports est un fait, pas un jugement
+    // fiable — un point d'entrée/façade qui agrège volontairement beaucoup de
+    // sous-modules (ex. barrel file) peut légitimement en importer beaucoup.
+    severity: info
     message: "Couplage élevé — trop d'imports dans ce module"
   }
   use high_coupling

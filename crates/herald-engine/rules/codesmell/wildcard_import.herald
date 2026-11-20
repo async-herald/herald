@@ -1,8 +1,8 @@
 rule wildcard_import {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
-    message: "Avoid 'from module import *': pollutes namespace, hides origins"
+    message: "Évite 'from module import *' — pollue l'espace de noms et masque l'origine des symboles"
   }
   match {
     py: from $M import *

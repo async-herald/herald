@@ -1,8 +1,8 @@
 rule no_alert {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
-    message: "Avoid alert/confirm/prompt: blocking dialogs are bad UX and often debug leftovers"
+    message: "Évite alert/confirm/prompt — ces dialogues bloquants nuisent à l'UX et sont souvent des oublis de debug"
   }
   dedupe linecol
   match {

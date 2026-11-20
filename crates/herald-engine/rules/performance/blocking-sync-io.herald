@@ -1,0 +1,20 @@
+rule blocking-sync-io {
+  meta {
+    type: quality
+    severity: warning
+    message: "I/O synchrone bloquant — utilise la version asynchrone (fs.promises / await)"
+  }
+  match {
+    js, ts: $FS.readFileSync($P)
+    js, ts: $FS.writeFileSync($P)
+    js, ts: $CP.execSync($CMD)
+  }
+
+  tests {
+    js {
+      "const d = fs.readFileSync('big.json')" => fail
+      "const out = cp.execSync('ls')" => fail
+      "const d = await fs.promises.readFile('big.json')" => pass
+    }
+  }
+}

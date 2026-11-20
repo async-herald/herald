@@ -8,7 +8,7 @@ use tree_sitter::Tree;
 
 pub const META: FnRule = FnRule {
     name: "no_unused_vars",
-    category: Category::CodeSmell,
+    category: Category::Quality,
     check,
 };
 
@@ -65,9 +65,9 @@ pub fn check(code: &str, tree: Option<&Tree>, language: Language) -> Vec<Issue> 
         }
         vec![Issue {
             rule: META.name.to_string(),
-            category: Category::CodeSmell,
+            category: Category::Quality,
             severity: Severity::Warning,
-            message: format!("Unused variable '{name}' — remove it or prefix with '_'"),
+            message: format!("Variable '{name}' inutilisée — supprime-la ou préfixe-la par '_'"),
             line,
             column,
         }]

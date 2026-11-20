@@ -1,4 +1,18 @@
+# Compilation (workspace Cargo) et paquets de l'app de bureau.
 target/
-Cargo.lock
-*.log
+dist/
+
+# Clés et certificats de signature (scripts/setup-release-secrets.sh) :
+# ne jamais les enregistrer dans le dépôt.
+*.p12
+*.p8
+*.pem
+*.key
+.env
+.env.*
+
+# Systèmes et éditeurs.
 .DS_Store
+.idea/
+.vscode/
+*.log

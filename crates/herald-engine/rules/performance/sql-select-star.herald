@@ -1,0 +1,20 @@
+rule sql-select-star {
+  meta {
+    type: quality
+    severity: info
+    message: "SELECT * — ramène des colonnes inutiles (I/O + mémoire) ; liste les champs nécessaires"
+  }
+  match {
+    js, ts, py, go, java, php: /(?i)SELECT\s+\*\s+FROM/
+  }
+
+  tests {
+    js {
+      "const q = 'SELECT * FROM users'" => fail
+      "const q = 'SELECT id, name FROM users'" => pass
+    }
+    py {
+      "q = 'select  *  from  orders'" => fail
+    }
+  }
+}

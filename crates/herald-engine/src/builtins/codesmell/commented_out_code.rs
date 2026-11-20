@@ -10,7 +10,7 @@ use crate::types::{FnRule, Issue, Severity};
 
 pub const META: FnRule = FnRule {
     name: "commented-out-code",
-    category: Category::CodeSmell,
+    category: Category::Quality,
     check,
 };
 
@@ -59,9 +59,9 @@ pub fn check(code: &str, tree: Option<&Tree>, language: Language) -> Vec<Issue> 
         if text.lines().any(looks_like_code) {
             vec![Issue {
                 rule: META.name.to_string(),
-                category: Category::CodeSmell,
+                category: Category::Quality,
                 severity: Severity::Warning,
-                message: "Commented-out code — delete it (version control keeps the history)"
+                message: "Code commenté laissé dans le fichier — supprime-le (Git garde l'historique)"
                     .to_string(),
                 line,
                 column,

@@ -1,8 +1,8 @@
 rule deep-nesting {
   meta {
-    type: code-smell
+    type: quality
     severity: warning
-    message: "Deeply nested code ({value} > {threshold} levels) — use early returns / guard clauses or extract helpers"
+    message: "Imbrication profonde ({value} > {threshold} niveaux) — utilise des retours anticipés / clauses de garde, ou extrais des fonctions"
   }
   measure nesting > 4
 }

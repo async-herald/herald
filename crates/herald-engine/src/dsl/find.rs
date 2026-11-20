@@ -29,11 +29,12 @@ pub fn compile_code(
     explicit: bool,
     rule_id: &str,
 ) -> Result<Variant, String> {
-    let rewritten = rewrite_metavars(snippet);
-
     let mut queries = Vec::new();
     let mut last_err = None;
     for &lang in languages {
+        // Rewritten per language: PHP spells metavariables differently (see
+        // `rewrite_metavars`).
+        let rewritten = rewrite_metavars(snippet, lang);
         match compile_one(&rewritten, lang, rule_id) {
             Ok(q) => queries.push((lang, q)),
             Err(e) if explicit => return Err(e),
@@ -91,15 +92,29 @@ pub fn compile_regex(regex: &str, languages: &[Language], rule_id: &str) -> Resu
 }
 
 /// `$ARG` -> `HERALDMETA_ARG` so the snippet parses as ordinary code.
-fn rewrite_metavars(snippet: &str) -> String {
+///
+/// PHP is the exception: there `$` is real syntax (every variable carries it),
+/// so `$this`, `$_GET` or `$request` are *code*, not holes. In PHP a metavariable
+/// must therefore start with an uppercase letter (`$ARG`, `$Q` — the convention
+/// every rule already follows), and the `$` sigil is kept so the snippet stays
+/// valid PHP: `$ARG` -> `$HERALDMETA_ARG`. `compile_node` turns that variable
+/// back into a wildcard, so it still matches any expression, not just variables.
+fn rewrite_metavars(snippet: &str, lang: Language) -> String {
+    let php = lang == Language::Php;
     let bytes = snippet.as_bytes();
     let mut out = String::with_capacity(snippet.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'$'
-            && i + 1 < bytes.len()
-            && (bytes[i + 1].is_ascii_alphabetic() || bytes[i + 1] == b'_')
-        {
+        let starts_metavar = i + 1 < bytes.len()
+            && if php {
+                bytes[i + 1].is_ascii_uppercase()
+            } else {
+                bytes[i + 1].is_ascii_alphabetic() || bytes[i + 1] == b'_'
+            };
+        if bytes[i] == b'$' && starts_metavar {
+            if php {
+                out.push('$');
+            }
             out.push_str(META_PREFIX);
             i += 1;
             while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
@@ -175,6 +190,10 @@ fn wrap_candidates(lang: Language) -> Vec<(&'static str, &'static str)> {
         Language::Swift => vec![("func m(){", "}")],
         Language::Kotlin => vec![("fun m(){", "}")],
         Language::Php => vec![("<?php ", ";")],
+        // Markup/styles : un fragment HTML est valide au top-level ; en CSS on
+        // essaie le top-level (rulesets/at-rules) puis un bloc de déclaration.
+        Language::Html => vec![("", "")],
+        Language::Css => vec![("", ""), ("a{", "}")],
     }
 }
 
@@ -218,7 +237,10 @@ fn has_error(node: Node) -> bool {
 fn compile_node(node: Node, code: &str, ctr: &mut usize) -> String {
     let text = node.utf8_text(code.as_bytes()).unwrap_or("");
 
-    if let Some(name) = text.strip_prefix(META_PREFIX) {
+    // A PHP metavariable keeps its `$` sigil (`$HERALDMETA_ARG`) so the snippet
+    // parses; drop it before recovering the capture name.
+    let bare = text.strip_prefix('$').unwrap_or(text);
+    if let Some(name) = bare.strip_prefix(META_PREFIX) {
         if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             return format!("(_) @{name}");
         }
@@ -262,7 +284,15 @@ fn compile_node(node: Node, code: &str, ctr: &mut usize) -> String {
 /// Identifier- and string-bearing node kinds per grammar, for regex `find`.
 fn ident_string_kinds(lang: Language) -> &'static [&'static str] {
     match lang {
-        Language::JavaScript | Language::TypeScript => {
+        // JS inclut les éléments JSX (le grammaire JavaScript parse le JSX) : les
+        // regex peuvent ainsi matcher `<img …/>` dans du React `.js/.jsx`.
+        Language::JavaScript => &[
+            "identifier", "property_identifier", "string", "template_string",
+            "jsx_self_closing_element", "jsx_opening_element",
+        ],
+        // TypeScript : le grammaire du registry ne définit PAS les nœuds JSX ;
+        // ajouter des kinds JSX ici casserait toutes les regex sur .ts.
+        Language::TypeScript => {
             &["identifier", "property_identifier", "string", "template_string"]
         }
         Language::Python => &["identifier", "string"],
@@ -278,5 +308,16 @@ fn ident_string_kinds(lang: Language) -> &'static [&'static str] {
         Language::Swift => &["simple_identifier", "line_string_literal"],
         Language::Lua => &["identifier", "string"],
         Language::Dart => &["identifier", "string_literal"],
+        // Markup : on cible les balises brutes (start_tag / self_closing_tag),
+        // leurs attributs et le texte, pour que les regex matchent le source.
+        Language::Html => &[
+            "start_tag", "self_closing_tag", "attribute", "tag_name",
+            "attribute_name", "quoted_attribute_value", "text", "comment",
+        ],
+        // Styles : noms de propriété, valeurs, sélecteurs, et le nœud `important`.
+        Language::Css => &[
+            "property_name", "plain_value", "string_value", "class_name",
+            "id_name", "tag_name", "identifier", "important", "comment",
+        ],
     }
 }

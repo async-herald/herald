@@ -4,6 +4,10 @@ Chaque version a sa section « ## <version> » : elle est publiée telle quelle 
 « Mises à jour » de herald.codes (affichée par l'app) et annoncée sur Discord.
 Une version sans section ne peut pas être publiée.
 
+## 0.2.1
+- Analyse depuis VS Code : l'extension Async Herald lance maintenant l'analyse avec l'app installée sur la machine, sans ouvrir sa fenêtre. Même note et mêmes règles que dans l'app, l'analyse compte dans le quota du compte et apparaît dans l'historique ; aucun fichier n'est envoyé.
+- « Voir dans Async Herald », depuis l'extension, ouvre l'app sur le projet (ajouté s'il n'y était pas).
+
 ## 0.2.0
 - Nouvel onglet Général, ouvert en premier : l'annonce du héraut (la note et son évolution, ce qui reste critique), puis quatre axes en grandes cartes, Sécurité, Qualité, Architecture (Pattern, Versioning, DevOps et Tests) et Dépendances, chacun avec sa note, ses problèmes, sa règle la plus fréquente ou ses alertes CVE, et la courbe de ses dernières analyses. Un clic sur une carte ouvre l'onglet de la catégorie.
 - En-tête de projet unique sur tous les onglets (nom, chemin, dernière analyse) et onglets soulignés. La carte du code passe dans l'onglet Code (bascule Éditeur / Carte du code).

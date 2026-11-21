@@ -169,6 +169,10 @@ impl HeraldApp {
         app.reset_selection();
         app.refresh_alerts(cx);
         app.start_service(window, cx);
+        // `--open <dossier>` (extension VS Code) : ajoute et affiche ce projet.
+        if let Some(path) = crate::headless::requested_open() {
+            app.add_project(path, cx);
+        }
         // Développement : `HERALD_DEV_THEME=dark|light|system` (non enregistré).
         #[cfg(debug_assertions)]
         if let Ok(key) = std::env::var("HERALD_DEV_THEME") {

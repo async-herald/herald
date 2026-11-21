@@ -9,6 +9,7 @@
 mod assets;
 mod engine;
 mod export;
+mod headless;
 mod model;
 mod paths;
 mod service;
@@ -30,6 +31,17 @@ use crate::ui::HeraldApp;
 actions!(herald, [Quit]);
 
 fn main() {
+    // Ligne de commande (extension VS Code) : `--analyze` ne crée aucune fenêtre.
+    match headless::parse(std::env::args_os().skip(1)) {
+        headless::Command::Analyze(path) => std::process::exit(headless::run_analyze(&path)),
+        headless::Command::Version => {
+            println!("{VERSION}");
+            return;
+        }
+        headless::Command::Open(path) => headless::set_open(path),
+        headless::Command::Window => {}
+    }
+
     Application::new()
         .with_assets(assets::Assets)
         .run(|cx: &mut App| {

@@ -4,6 +4,9 @@ Chaque version a sa section « ## <version> » : elle est publiée telle quelle 
 « Mises à jour » de herald.codes (affichée par l'app) et annoncée sur Discord.
 Une version sans section ne peut pas être publiée.
 
+## 0.2.2
+- Mac Intel : l'app fonctionne maintenant sur tous les Mac, Apple Silicon et Intel (app universelle), avec le .dmg comme avec `brew install herald`. Sur un Mac Intel, macOS refusait de l'ouvrir (« n'est pas prise en charge par ce Mac »).
+
 ## 0.2.1
 - Analyse depuis VS Code : l'extension Async Herald lance maintenant l'analyse avec l'app installée sur la machine, sans ouvrir sa fenêtre. Même note et mêmes règles que dans l'app, l'analyse compte dans le quota du compte et apparaît dans l'historique ; aucun fichier n'est envoyé.
 - « Voir dans Async Herald », depuis l'extension, ouvre l'app sur le projet (ajouté s'il n'y était pas).

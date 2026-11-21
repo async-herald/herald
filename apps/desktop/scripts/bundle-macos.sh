@@ -26,11 +26,30 @@ TARGET_DIR="${CARGO_TARGET_DIR:-../../target}"
 OUT="$TARGET_DIR/release/bundle"
 APP="$OUT/$BUNDLE.app"
 
-cargo build --release --bin "$BIN"
+# Binaire universel : Apple Silicon (arm64) et Intel (x86_64) dans un seul
+# exécutable, assemblé par lipo. Un seul .dmg, une seule entrée « macos » dans
+# l'admin et le même cask pour tous les Mac.
+# HERALD_MAC_ARCH=native : seulement l'architecture de la machine (plus rapide en local).
+ARCHS=(aarch64-apple-darwin x86_64-apple-darwin)
+if [ "${HERALD_MAC_ARCH:-universal}" = native ]; then
+  cargo build --release --bin "$BIN"
+  BINARY="$TARGET_DIR/release/$BIN"
+else
+  rustup target add "${ARCHS[@]}" >/dev/null
+  slices=()
+  for arch in "${ARCHS[@]}"; do
+    cargo build --release --target "$arch" --bin "$BIN"
+    slices+=("$TARGET_DIR/$arch/release/$BIN")
+  done
+  BINARY="$TARGET_DIR/release/$BIN-universal"
+  mkdir -p "$TARGET_DIR/release"
+  lipo -create "${slices[@]}" -output "$BINARY"
+  lipo "$BINARY" -verify_arch arm64 x86_64
+fi
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$TARGET_DIR/release/$BIN" "$APP/Contents/MacOS/$BIN"
+cp "$BINARY" "$APP/Contents/MacOS/$BIN"
 
 # Icône : jeu de tailles généré depuis le logo (256 px), assemblé en .icns.
 ICONSET="$OUT/Herald.iconset"

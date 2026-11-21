@@ -4,8 +4,10 @@
 //! sont remplis par `crate::engine` à partir du résultat du moteur `herald-engine`.
 
 mod advisory;
+pub mod code_map;
 mod grade;
 mod issue;
+pub mod patterns;
 mod project;
 mod report;
 mod rule;

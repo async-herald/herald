@@ -1610,7 +1610,7 @@ impl Focusable for CodeArea {
 
 impl Render for CodeArea {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::light();
+        let theme = Theme::current();
         div()
             .size_full()
             .flex()
@@ -2192,7 +2192,7 @@ mod tests {
 
     #[test]
     fn highlights_comments_strings_and_keywords() {
-        let theme = Theme::light();
+        let theme = Theme::current();
         let syntax = Syntax::for_path("src/main.rs");
         let spans = syntax.highlight("let s = \"a\"; // note", &theme);
         assert!(

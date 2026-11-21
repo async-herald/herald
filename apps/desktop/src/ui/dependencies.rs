@@ -9,7 +9,7 @@ use gpui::{AnyElement, FontWeight, Hsla, SharedString, div, prelude::*, px};
 
 use super::analysis::severity_color;
 use super::app::HeraldApp;
-use super::components::{Button, ButtonVariant, SeverityLabel};
+use super::components::{Button, ButtonVariant};
 use super::home::{count_label, list_row, section_header, surface};
 use crate::engine::cve::{self, Dependency};
 use crate::model::{Advisory, Severity};
@@ -24,8 +24,8 @@ const KIND_W: gpui::Pixels = px(80.);
 const ECOSYSTEM_W: gpui::Pixels = px(80.);
 const STATUS_W: gpui::Pixels = px(150.);
 const FIX_W: gpui::Pixels = px(110.);
-/// Retrait des avis sous le paquet déplié.
-const ADVISORY_INDENT: gpui::Pixels = px(32.);
+/// Colonne du bouton « Corriger » / « Mettre à jour ».
+const ACTION_W: gpui::Pixels = px(130.);
 
 /// Paquets montrés.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,8 +41,6 @@ pub(super) struct DependencyTab {
     /// `None` : « Vulnérables » s'il y en a, sinon « Toutes ».
     filter: Option<DependencyFilter>,
     page: usize,
-    /// Paquet dont les avis sont dépliés (`écosystème/nom@version`).
-    expanded: Option<SharedString>,
     /// Revérification OSV en cours pour ce projet.
     checking: Option<PathBuf>,
     /// Échec de la dernière revérification.
@@ -60,14 +58,6 @@ struct Row<'a> {
 }
 
 impl Row<'_> {
-    fn key(&self) -> SharedString {
-        format!(
-            "{}/{}@{}",
-            self.dep.ecosystem, self.dep.name, self.dep.version
-        )
-        .into()
-    }
-
     fn is_vulnerable(&self) -> bool {
         !self.advisories.is_empty()
     }
@@ -82,16 +72,6 @@ impl HeraldApp {
 
     fn set_dependency_page(&mut self, page: usize, cx: &mut Context<Self>) {
         self.dependency_tab.page = page;
-        cx.notify();
-    }
-
-    fn toggle_dependency(&mut self, key: SharedString, cx: &mut Context<Self>) {
-        let tab = &mut self.dependency_tab;
-        tab.expanded = if tab.expanded.as_ref() == Some(&key) {
-            None
-        } else {
-            Some(key)
-        };
         cx.notify();
     }
 
@@ -168,17 +148,7 @@ impl HeraldApp {
         let mut list: Vec<AnyElement> = Vec::new();
         for (offset, row) in shown.iter().skip(first).take(PAGE_SIZE).enumerate() {
             let ix = first + offset;
-            let key = row.key();
-            let expanded = self.dependency_tab.expanded.as_ref() == Some(&key);
-            list.push(dependency_row(ix, row, key, expanded, theme, cx).into_any_element());
-            if expanded {
-                list.extend(row.advisories.iter().enumerate().map(|(n, advisory)| {
-                    advisory_row((ix, n), advisory, theme).into_any_element()
-                }));
-                if !row.dep.resolved {
-                    list.push(unresolved_note(row.dep, theme).into_any_element());
-                }
-            }
+            list.push(dependency_row(ix, row, theme, cx).into_any_element());
         }
 
         let checking = self.dependency_tab.checking.as_ref() == Some(&project.path);
@@ -385,13 +355,12 @@ fn column_headers(theme: Theme) -> impl IntoElement {
                 .justify_end()
                 .child("Corrigé en"),
         )
+        .child(div().w(ACTION_W).flex_none())
 }
 
 fn dependency_row(
     ix: usize,
     row: &Row,
-    key: SharedString,
-    expanded: bool,
     theme: Theme,
     cx: &mut Context<HeraldApp>,
 ) -> impl IntoElement + use<> {
@@ -417,15 +386,26 @@ fn dependency_row(
         (true, None) => "aucune".to_owned(),
     };
     let vulnerable = row.is_vulnerable();
+    // Ligne ou bouton : la modale du paquet (problème, commande, « Corriger »).
+    let open = {
+        let dep = dep.clone();
+        let advisories: Vec<Advisory> = row.advisories.iter().map(|&a| a.clone()).collect();
+        let fix = row.fix.map(str::to_owned);
+        std::rc::Rc::new(
+            move |app: &mut HeraldApp, window: &mut gpui::Window, cx: &mut Context<HeraldApp>| {
+                app.open_dependency_modal(dep.clone(), advisories.clone(), fix.clone(), window, cx)
+            },
+        )
+    };
 
     list_row(theme)
         .id(("dependency", ix))
         .items_center()
-        .when(expanded, |this| this.bg(theme.bg_active))
-        .when(vulnerable, |this| {
-            this.cursor_pointer()
-                .hover(|style| style.bg(theme.bg_hover))
-                .on_click(cx.listener(move |app, _, _, cx| app.toggle_dependency(key.clone(), cx)))
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.bg_hover))
+        .on_click({
+            let open = open.clone();
+            cx.listener(move |app, _, window, cx| open(app, window, cx))
         })
         .child(
             div()
@@ -493,62 +473,29 @@ fn dependency_row(
                 })
                 .child(fix),
         )
-}
-
-/// Un avis OSV sous le paquet déplié.
-fn advisory_row(id: (usize, usize), advisory: &Advisory, theme: Theme) -> impl IntoElement + use<> {
-    let cvss = advisory
-        .cvss
-        .map(|score| format!("CVSS {score:.1}").replace('.', ","));
-    let published = cve::published_label(advisory.published_unix, cve::unix_now());
-    let url = advisory.url.clone();
-    let fixed = advisory.fixed_version.as_ref().map_or_else(
-        || "pas encore de correctif".to_owned(),
-        |v| format!("corrigé en {v}"),
-    );
-
-    list_row(theme).pl(ADVISORY_INDENT).bg(theme.bg_page).child(
-        div()
-            .flex_1()
-            .min_w_0()
-            .flex()
-            .flex_col()
-            .gap(metrics::SPACE_1)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(metrics::SPACE_3)
-                    .text_size(metrics::TEXT_SM)
-                    .text_color(theme.ink_muted)
-                    .child(SeverityLabel::new(advisory.severity, theme))
-                    .child(div().font_family(fonts::MONO).child(advisory.id.clone()))
-                    .children(cvss)
-                    .child(fixed)
-                    .child(div().flex_1())
-                    .child(format!("publiée {published}"))
-                    .child(
-                        Button::new(("dep-advisory", id.0 * 1_000 + id.1), "Voir l'avis", theme)
-                            .variant(ButtonVariant::Ghost)
-                            .on_click(move |_, _, cx| cx.open_url(&url)),
-                    ),
-            )
-            .child(div().child(advisory.summary.clone())),
-    )
-}
-
-/// Sous un paquet sans version exacte : pourquoi ses avis sont à confirmer.
-fn unresolved_note(dep: &Dependency, theme: Theme) -> impl IntoElement + use<> {
-    list_row(theme)
-        .pl(ADVISORY_INDENT)
-        .bg(theme.bg_page)
-        .text_size(metrics::TEXT_SM)
-        .text_color(theme.ink_muted)
-        .child(format!(
-            "{} déclare {} {} au minimum, sans lockfile : la version installée peut être plus \
-             récente et déjà corrigée. Ajoutez le lockfile au dépôt pour un résultat exact.",
-            dep.source, dep.name, dep.version
-        ))
+        .child(
+            div().w(ACTION_W).flex_none().flex().justify_end().child(
+                Button::new(
+                    ("dependency-fix", ix),
+                    if vulnerable && row.fix.is_some() {
+                        "Corriger"
+                    } else {
+                        "Mettre à jour"
+                    },
+                    theme,
+                )
+                .variant(if vulnerable && row.fix.is_some() {
+                    ButtonVariant::Default
+                } else {
+                    ButtonVariant::Ghost
+                })
+                .on_click(cx.listener(move |app, _, window, cx| {
+                    // Le clic ne remonte pas à la ligne (même modale).
+                    cx.stop_propagation();
+                    open(app, window, cx)
+                })),
+            ),
+        )
 }
 
 /// Vulnérables / Directes / Toutes.

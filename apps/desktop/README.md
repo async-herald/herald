@@ -65,7 +65,10 @@ n'importe où dans la fenêtre.
   (`/v1/querybatch`, puis fiche de chaque vulnérabilité, en cache 24 h ; avis retirés ignorés). CVE affiché quand il existe, CVSS 3 calculé depuis le vecteur, plus petite version corrigée au-dessus
   de la version installée. Contrôle après chaque analyse et à chaque lancement (une CVE publiée depuis apparaît sans
   relancer). Seuls les noms et versions des paquets sont envoyés à osv.dev.
-- **Panneau de la note** : à droite des quatre onglets d'un projet (Plan, Revue, Code, Dépendances) ; note actuelle
+- **Patterns** (`ui/patterns.rs`, catalogue `model/patterns.rs`) : une boîte par pattern de conception suivi par
+  les règles de la catégorie Pattern, avec son état dans le projet, un schéma « à éviter / à faire », deux astuces
+  et les premiers endroits à revoir (un clic ouvre le fichier à la ligne dans l'onglet Code).
+- **Panneau de la note** : à droite des quatre onglets d'un projet (Plan, Patterns, Code, Dépendances) ; note actuelle
   et estimée, relance de l'analyse, export du rapport (`src/export.rs`) en **PDF** (police Inter embarquée) ou en
   **Markdown** : note, catégories, problèmes par règle (explication, correctif, emplacements), dépendances
   vulnérables. Enregistré où l'utilisateur le choisit, puis montré dans le Finder.
@@ -73,7 +76,7 @@ n'importe où dans la fenêtre.
   en cache), dossiers à enfant unique regroupés (`src/main/java`), guides d'indentation, pastille de gravité et
   nombre de problèmes par fichier, filtre « Tous / Problèmes », « Replier », fichier actif mis en vue. L'éditeur
   met à jour l'index des lignes sur place à chaque frappe.
-- **Dépendances** (`ui/dependencies.rs`, 4ᵉ onglet du projet après Plan, Revue et Code) : chaque paquet avec sa
+- **Dépendances** (`ui/dependencies.rs`, 4ᵉ onglet du projet après Plan, Patterns et Code) : chaque paquet avec sa
   version, directe ou transitive, son écosystème, ses vulnérabilités (gravité la plus haute) et la version qui les
   corrige toutes. Filtres Vulnérables / Directes / Toutes, 50 paquets par page, clic sur un paquet vulnérable pour
   voir ses avis (CVE, CVSS, correctif, lien). « Revérifier auprès d'OSV » refait le contrôle sans relancer

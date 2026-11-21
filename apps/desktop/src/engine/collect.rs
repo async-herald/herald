@@ -1,9 +1,19 @@
 //! Collecte des fichiers d'un projet, avec les mêmes règles que le backend quand il
 //! récupère un dépôt (`herald-app/src/source/filter.rs` et `source/mod.rs`) : mêmes
 //! dossiers ignorés, même taille maximale, même bruit écarté, mêmes fichiers gardés.
+//!
+//! En local, le dossier contient aussi ce qu'un clone n'aurait pas : fichiers
+//! ignorés par Git, caches, environnements et produits de compilation. Le
+//! parcours les écarte (`walk_project`) : règles `.gitignore` / `.ignore` /
+//! `.git/info/exclude` à tous les niveaux, dossiers cachés (sauf ceux de
+//! configuration), dossiers générés connus, et dossiers marqués comme cache
+//! (`CACHEDIR.TAG`), environnement Python (`pyvenv.cfg`) ou paquet compilé
+//! (`.app`, `.framework`…).
 
 use std::fs;
 use std::path::Path;
+
+use ignore::{DirEntry, WalkBuilder};
 
 use herald_engine::builtins::devops;
 use herald_engine::config::{CONFIG_FILE, Config};
@@ -39,10 +49,129 @@ const SKIP_DIRS: &[&str] = &[
     "storybook-static",
 ];
 
+/// Dossiers générés par les outils (caches, dépendances installées, sorties de
+/// compilation), en plus de `SKIP_DIRS` ; les dossiers cachés sont traités à part.
+const GENERATED_DIRS: &[&str] = &[
+    "DerivedData",
+    "Pods",
+    "Carthage",
+    "xcuserdata",
+    "venv",
+    "bower_components",
+    "jspm_packages",
+    "site-packages",
+    "htmlcov",
+    "_build",
+    "deps",
+    "elm-stuff",
+    "zig-cache",
+    "zig-out",
+];
+
+/// Suffixes de dossiers compilés ou d'empaquetage (`App.app`, `Capacitor.framework`…).
+const GENERATED_DIR_SUFFIXES: &[&str] = &[
+    ".app",
+    ".framework",
+    ".xcframework",
+    ".dsym",
+    ".xcarchive",
+    ".egg-info",
+];
+
+/// Dossiers cachés qui contiennent de la configuration à analyser (CI, hooks,
+/// conteneurs de développement) ; les autres (`.venv`, `.gradle`, `.utmp`…)
+/// sont des caches ou des réglages d'outils.
+const KEPT_HIDDEN_DIRS: &[&str] = &[
+    ".github",
+    ".gitlab",
+    ".circleci",
+    ".buildkite",
+    ".gitea",
+    ".forgejo",
+    ".woodpecker",
+    ".tekton",
+    ".devcontainer",
+    ".docker",
+    ".husky",
+    ".config",
+    ".storybook",
+    ".well-known",
+    ".changeset",
+    ".cargo",
+];
+
+/// Fichiers qui marquent un dossier comme cache (norme `CACHEDIR.TAG`) ou
+/// comme environnement virtuel Python.
+const GENERATED_DIR_MARKERS: &[&str] = &["CACHEDIR.TAG", "pyvenv.cfg"];
+
+/// Dossier à ne pas parcourir (voir l'en-tête du module).
+fn is_skipped_dir(name: &str, path: &Path) -> bool {
+    if SKIP_DIRS.contains(&name) || GENERATED_DIRS.contains(&name) || name == ".DS_Store" {
+        return true;
+    }
+    let lower = name.to_ascii_lowercase();
+    if GENERATED_DIR_SUFFIXES
+        .iter()
+        .any(|suffix| lower.ends_with(suffix))
+    {
+        return true;
+    }
+    if name.starts_with('.') && !KEPT_HIDDEN_DIRS.contains(&name) {
+        return true;
+    }
+    GENERATED_DIR_MARKERS
+        .iter()
+        .any(|marker| path.join(marker).is_file())
+}
+
+/// Parcourt les fichiers du projet (liens symboliques non suivis) et appelle
+/// `visit` avec le chemin relatif (séparateur `/`) et la taille ; `visit`
+/// renvoie `false` pour arrêter.
+fn walk_project(root: &Path, mut visit: impl FnMut(String, u64) -> bool) {
+    let walker = WalkBuilder::new(root)
+        // Les dossiers cachés sont filtrés par `is_skipped_dir` ; les fichiers
+        // cachés (`.env`, `.gitlab-ci.yml`) restent analysés.
+        .hidden(false)
+        // Seulement les règles du projet : pas celles des dossiers parents ni
+        // l'exclusion globale de l'utilisateur, pour un résultat reproductible.
+        .parents(false)
+        .git_global(false)
+        .require_git(false)
+        .follow_links(false)
+        .filter_entry(|entry: &DirEntry| {
+            entry.depth() == 0
+                || !entry.file_type().is_some_and(|kind| kind.is_dir())
+                || !is_skipped_dir(&entry.file_name().to_string_lossy(), entry.path())
+        })
+        .build();
+    for entry in walker.flatten() {
+        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+            continue;
+        }
+        let Ok(relative) = entry.path().strip_prefix(root) else {
+            continue;
+        };
+        let relative = relative
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/");
+        let size = entry.metadata().map_or(u64::MAX, |m| m.len());
+        if !visit(relative, size) {
+            return;
+        }
+    }
+}
+
 /// Fichiers retenus, chemins relatifs à `root` avec des `/`, dans un ordre stable.
 pub fn collect_files(root: &Path) -> Vec<FileInput> {
     let mut candidates = Vec::new();
-    walk(root, root, &mut candidates);
+    walk_project(root, |relative, size| {
+        if keep(&relative, size) {
+            candidates.push(relative);
+        }
+        true
+    });
     candidates.sort();
 
     candidates
@@ -58,81 +187,36 @@ pub fn collect_files(root: &Path) -> Vec<FileInput> {
         .collect()
 }
 
-/// Tous les fichiers du projet pour l'explorateur (dossiers ignorés écartés,
-/// aucun filtre de taille ni de type), chemins relatifs avec des `/`, triés.
+/// Chemins des fichiers que l'analyse retiendrait, sans les lire (carte du
+/// code de l'onglet Général), triés.
+pub fn analyzed_paths(root: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    walk_project(root, |relative, size| {
+        if keep(&relative, size) {
+            out.push(relative);
+        }
+        out.len() < MAX_FILES
+    });
+    out.sort();
+    out
+}
+
+/// Tous les fichiers du projet pour l'explorateur (dossiers ignorés ou générés
+/// écartés, aucun filtre de taille ni de type), chemins relatifs avec des `/`, triés.
 pub fn project_files(root: &Path) -> Vec<String> {
     let mut out = Vec::new();
-    walk_all(root, root, &mut out);
+    walk_project(root, |relative, _| {
+        if !relative.ends_with(".DS_Store") {
+            out.push(relative);
+        }
+        out.len() < MAX_TREE_FILES
+    });
     out.sort();
-    out.truncate(MAX_TREE_FILES);
     out
 }
 
 /// Limite de l'explorateur, pour garder l'arbre lisible et rapide.
 const MAX_TREE_FILES: usize = 20_000;
-
-fn walk_all(root: &Path, dir: &Path, out: &mut Vec<String>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        if out.len() >= MAX_TREE_FILES {
-            return;
-        }
-        let Ok(kind) = entry.file_type() else {
-            continue;
-        };
-        let path = entry.path();
-        if kind.is_dir() {
-            let name = entry.file_name();
-            if !SKIP_DIRS.iter().any(|skip| name == *skip) && name != ".DS_Store" {
-                walk_all(root, &path, out);
-            }
-        } else if kind.is_file() && entry.file_name() != ".DS_Store" {
-            if let Ok(relative) = path.strip_prefix(root) {
-                out.push(
-                    relative
-                        .components()
-                        .map(|c| c.as_os_str().to_string_lossy())
-                        .collect::<Vec<_>>()
-                        .join("/"),
-                );
-            }
-        }
-    }
-}
-
-fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        // Les liens symboliques ne sont pas suivis (ni dossiers ni fichiers).
-        let Ok(kind) = entry.file_type() else {
-            continue;
-        };
-        let path = entry.path();
-        let Ok(relative) = path.strip_prefix(root) else {
-            continue;
-        };
-        let relative = relative
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/");
-        if kind.is_dir() {
-            let name = entry.file_name();
-            if !SKIP_DIRS.iter().any(|skip| name == *skip) {
-                walk(root, &path, out);
-            }
-        } else if kind.is_file() {
-            let size = entry.metadata().map_or(u64::MAX, |m| m.len());
-            if keep(&relative, size) {
-                out.push(relative);
-            }
-        }
-    }
-}
 
 /// Copie de `filter::keep` du backend.
 fn keep(path: &str, size: u64) -> bool {
@@ -264,6 +348,58 @@ mod tests {
         assert!(!keep("src/types.d.ts", 10));
         assert!(!keep("README.md", 10));
         assert!(!keep("src/huge.rs", MAX_FILE_BYTES + 1));
+    }
+
+    #[test]
+    fn local_walk_skips_ignored_and_generated_folders() {
+        let root = std::env::temp_dir().join(format!("herald-walk-test-{}", std::process::id()));
+        fs::remove_dir_all(&root).ok();
+        let files = [
+            "src/app.js",
+            ".env",
+            ".gitlab-ci.yml",
+            ".github/workflows/ci.yml",
+            "ios/.gitignore",
+            "ios/App/AppDelegate.swift",
+            // Ignoré par ios/.gitignore.
+            "ios/DerivedData/Build/x.js",
+            "ios/logs/run.js",
+            // Dossier caché d'outil.
+            ".utmp/session.js",
+            // Environnement Python et cache marqués.
+            "env/pyvenv.cfg",
+            "env/lib/site.py",
+            "cache/CACHEDIR.TAG",
+            "cache/a.js",
+            // Paquet compilé.
+            "ios/Capacitor.framework/Headers/x.js",
+            "Pods/Lib/y.swift",
+        ];
+        for file in files {
+            let path = root.join(file);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, "x").unwrap();
+        }
+        fs::write(root.join("ios/.gitignore"), "DerivedData\nlogs/\n").unwrap();
+
+        let listed = project_files(&root);
+        let analyzed: Vec<String> = collect_files(&root).into_iter().map(|f| f.path).collect();
+        fs::remove_dir_all(&root).ok();
+
+        assert_eq!(
+            listed,
+            [
+                ".env",
+                ".github/workflows/ci.yml",
+                ".gitlab-ci.yml",
+                "ios/.gitignore",
+                "ios/App/AppDelegate.swift",
+                "src/app.js",
+            ]
+        );
+        assert!(analyzed.contains(&"src/app.js".to_owned()));
+        assert!(analyzed.contains(&".github/workflows/ci.yml".to_owned()));
+        assert!(!analyzed.iter().any(|path| path.contains("DerivedData")));
     }
 
     #[test]

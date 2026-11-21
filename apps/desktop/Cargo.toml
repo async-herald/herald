@@ -1,6 +1,6 @@
 [package]
 name = "async-herald-desktop"
-version = "0.1.9"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Herald Desktop : analyse de code 100 % locale, interface native GPUI"
@@ -33,6 +33,7 @@ ureq = { version = "3.5.1", features = ["json"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 # Mémoire et processeur de l'app pendant une analyse (`src/ui/resource_monitor.rs`).
 sysinfo = { version = "0.31", default-features = false, features = ["system"] }
+ignore = "0.4"
 
 # Icône et informations de version de l'exécutable Windows (`build.rs`).
 [build-dependencies]

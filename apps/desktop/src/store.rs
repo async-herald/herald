@@ -83,13 +83,28 @@ struct StoredReport {
     issues: Vec<Issue>,
 }
 
-/// Une analyse de l'historique d'un projet (pas encore affiché par l'interface).
-#[allow(dead_code)]
+/// Une analyse de l'historique d'un projet (bandeau du héraut, courbes des cartes).
 #[derive(Clone, Debug)]
 pub struct HistoryEntry {
+    /// Date de l'analyse (secondes Unix ; pas encore affichée).
+    #[allow(dead_code)]
     pub analyzed_at: u64,
     pub score: u8,
+    /// Problèmes de l'analyse (enregistrés ; plus affichés pour l'instant).
+    #[allow(dead_code)]
     pub issue_count: u32,
+    /// Notes par catégorie (seulement pour les analyses les plus récentes,
+    /// voir `RECENT_CATEGORIES`).
+    pub categories: Vec<CategoryScore>,
+}
+
+/// Analyses dont l'historique relit les notes par catégorie.
+const RECENT_CATEGORIES: usize = 6;
+
+/// Rapport enregistré réduit à ses notes par catégorie.
+#[derive(Deserialize)]
+struct StoredCategories {
+    categories: Vec<CategoryScore>,
 }
 
 fn db() -> Option<MutexGuard<'static, Connection>> {
@@ -337,6 +352,7 @@ pub fn save_resolved(path: &Path, report: &AnalysisReport) {
 
 /// Historique des notes du projet, du plus récent au plus ancien.
 #[allow(dead_code)]
+/// Analyses gardées d'un projet, la plus récente d'abord.
 pub fn history(path: &Path) -> Vec<HistoryEntry> {
     let Some(conn) = db() else {
         return Vec::new();
@@ -350,9 +366,31 @@ pub fn history(path: &Path) -> Vec<HistoryEntry> {
                 analyzed_at: r.get::<_, i64>(0)?.max(0) as u64,
                 score: r.get::<_, i64>(1)?.clamp(0, 100) as u8,
                 issue_count: r.get::<_, i64>(2)?.max(0) as u32,
+                categories: Vec::new(),
             })
         })?
-        .collect()
+        .collect::<Result<Vec<_>, _>>()
+    })
+    .map(|mut entries| {
+        // Notes par catégorie des dernières analyses (courbes de Général).
+        let reports: Vec<String> = conn
+            .prepare(
+                "SELECT report FROM analyses WHERE project_path = ?1 ORDER BY id DESC LIMIT ?2",
+            )
+            .and_then(|mut stmt| {
+                stmt.query_map(
+                    params![path_key(path), RECENT_CATEGORIES as i64],
+                    |r| r.get::<_, String>(0),
+                )?
+                .collect()
+            })
+            .unwrap_or_default();
+        for (entry, report) in entries.iter_mut().zip(reports) {
+            if let Ok(stored) = serde_json::from_str::<StoredCategories>(&report) {
+                entry.categories = stored.categories;
+            }
+        }
+        entries
     })
     .unwrap_or_default()
 }
@@ -603,6 +641,32 @@ pub fn set_setting(key: &str, value: bool) {
         conn.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)",
             params![format!("setting.{key}"), if value { "1" } else { "0" }],
+        ),
+    );
+}
+
+/// Réglage texte local (`meta`), `None` s'il n'a jamais été changé.
+pub fn text_setting(key: &str) -> Option<String> {
+    let conn = db()?;
+    log(
+        "réglage",
+        conn.query_row(
+            "SELECT value FROM meta WHERE key = ?1",
+            params![format!("setting.{key}")],
+            |r| r.get::<_, String>(0),
+        )
+        .optional(),
+    )
+    .flatten()
+}
+
+pub fn set_text_setting(key: &str, value: &str) {
+    let Some(conn) = db() else { return };
+    log(
+        "réglage",
+        conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)",
+            params![format!("setting.{key}"), value],
         ),
     );
 }

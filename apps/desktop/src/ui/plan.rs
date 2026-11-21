@@ -1,18 +1,20 @@
 //! Écran « Problèmes », vue Plan : les corrections triées par points
 //! rapportés, à cocher, avec la note estimée qui monte dans la colonne de droite.
 
-use gpui::{AnyElement, FontWeight, SharedString, div, prelude::*, px, relative};
+use gpui::{AnyElement, FontWeight, Window, div, prelude::*, px};
 
-use super::analysis::{rerun_button, severity_color, short_points, view_switch};
+use super::analysis::{rerun_button, severity_color, short_points};
 use super::app::{HeraldApp, WorkspaceView};
 use super::components::{Button, ButtonVariant, Icon, IconName, grade_color};
 use super::home::count_label;
 use crate::export::Format;
-use crate::model::{AnalysisReport, Grade};
+use crate::model::{AnalysisReport, Category, Grade};
 use crate::theme::{Theme, fonts, metrics};
 
 /// Corrections proposées au plus dans « Gains rapides ».
 const MAX_QUICK: usize = 5;
+/// Largeur de fenêtre sous laquelle le panneau de la note se replie.
+pub(super) const NARROW_WINDOW: gpui::Pixels = px(1200.);
 const ASIDE_WIDTH: gpui::Pixels = px(320.);
 /// Panneau « Votre note » réduit : une bande avec la note.
 const COLLAPSED_WIDTH: gpui::Pixels = px(56.);
@@ -21,16 +23,26 @@ const COLLAPSED_GRADE: gpui::Pixels = px(26.);
 pub(super) const SCORE_PANEL_COLLAPSED: &str = "score_panel_collapsed";
 const CHECK_SIZE: gpui::Pixels = px(16.);
 const GAIN_WIDTH: gpui::Pixels = px(56.);
-const BIG_GRADE: gpui::Pixels = px(52.);
-const BAR_H: gpui::Pixels = px(10.);
+const BIG_GRADE: gpui::Pixels = px(120.);
 
 impl HeraldApp {
-    /// Ouvre la revue de code sur le groupe `gi`.
-    pub(super) fn open_review(&mut self, gi: usize, cx: &mut Context<Self>) {
+    /// Ouvre le groupe `gi` dans l'onglet Code, sur sa première occurrence.
+    pub(super) fn open_group_in_code(
+        &mut self,
+        gi: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.selected_group = Some(gi);
         self.selected_occurrence = 0;
-        self.workspace_view = WorkspaceView::Review;
-        cx.notify();
+        let target = self
+            .selected_issue_index()
+            .and_then(|ix| self.report()?.issues.get(ix))
+            .map(|issue| (issue.file.to_string(), issue.line));
+        match target {
+            Some((file, line)) => self.open_in_ide(&file, line, window, cx),
+            None => self.set_workspace_view(WorkspaceView::Code, window, cx),
+        }
     }
 
     pub(super) fn render_correction_plan(
@@ -39,15 +51,38 @@ impl HeraldApp {
         theme: Theme,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some(project) = self.project() else {
+        if self.project().is_none() {
             return div().into_any_element();
+        }
+        let filter = self.category_filter;
+        // Filtré sur une catégorie (depuis l'onglet Général) : ses corrections
+        // seulement, toujours triées par points, sans « Gains rapides ».
+        let (order, quick) = match filter {
+            None => report.correction_plan(MAX_QUICK),
+            Some(category) => {
+                let (order, _) = report.correction_plan(MAX_QUICK);
+                let order: Vec<usize> = order
+                    .into_iter()
+                    .filter(|&gi| report.groups()[gi].category == category)
+                    .collect();
+                (order, 0)
+            }
         };
-        let (order, quick) = report.correction_plan(MAX_QUICK);
         let current = report.summary.grade();
         let target_score = report.score_with(&order[..quick]);
         let target = Grade::from_score(target_score);
 
-        let title = if order.is_empty() {
+        let title = if let Some(category) = filter {
+            if order.is_empty() {
+                format!("{} · rien à corriger", category.label())
+            } else {
+                format!(
+                    "{} · {}",
+                    category.label(),
+                    count_label(order.len() as u32, "correction", "corrections")
+                )
+            }
+        } else if order.is_empty() {
             "Aucun problème à corriger".to_owned()
         } else if target.is_better_than(current) {
             format!(
@@ -78,7 +113,9 @@ impl HeraldApp {
             .bg(theme.bg_surface)
             .border_1()
             .border_color(theme.border)
-            .child(caption("Gains rapides · triés par points rapportés", theme))
+            .when(quick > 0, |this| {
+                this.child(caption("Gains rapides · triés par points rapportés", theme))
+            })
             .children(quick_rows)
             .when(quick > 0 && target_score > report.summary.score, |this| {
                 this.child(
@@ -101,7 +138,15 @@ impl HeraldApp {
                 )
             })
             .when(!rest_rows.is_empty(), |this| {
-                this.child(caption("Ensuite", theme)).children(rest_rows)
+                this.child(caption(
+                    if quick > 0 {
+                        "Ensuite"
+                    } else {
+                        "Corrections · triées par points rapportés"
+                    },
+                    theme,
+                ))
+                .children(rest_rows)
             });
 
         div()
@@ -118,40 +163,21 @@ impl HeraldApp {
                         div()
                             .flex()
                             .flex_col()
-                            .gap(metrics::SPACE_4)
+                            .gap(metrics::SPACE_5)
                             .px(metrics::SPACE_8)
                             .py(metrics::SPACE_6)
+                            // Même en-tête que les autres onglets (nom, onglets).
+                            .child(self.workspace_header(theme, cx))
                             .child(
                                 div()
-                                    .flex()
-                                    .items_end()
-                                    .gap(metrics::SPACE_3)
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .flex()
-                                            .flex_col()
-                                            .gap(metrics::SPACE_1)
-                                            .child(
-                                                div()
-                                                    .text_size(metrics::TEXT_SM)
-                                                    .text_color(theme.ink_muted)
-                                                    .child(format!(
-                                                        "{} · plan de correction",
-                                                        project.name
-                                                    )),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(TITLE_SIZE)
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                                    .child(title),
-                                            ),
-                                    )
-                                    .child(view_switch(self.workspace_view, theme, cx)),
+                                    .text_size(TITLE_SIZE)
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(title),
                             )
                             .children(self.render_analysis_card(theme, cx))
+                            .children(filter.map(|category| {
+                                filter_notice(category, order.is_empty(), theme, cx)
+                            }))
                             .when(!order.is_empty(), |this| this.child(list)),
                     ),
             )
@@ -169,30 +195,47 @@ impl HeraldApp {
         let Some(project) = self.project() else {
             return div().into_any_element();
         };
-        if self.score_panel_collapsed {
+        // Fenêtre étroite : le panneau se replie de lui-même.
+        if self.score_panel_collapsed || self.viewport_width < NARROW_WINDOW {
             return collapsed_aside(report, theme, cx);
         }
         let (order, _) = report.correction_plan(MAX_QUICK);
-        // Relancer, puis télécharger le rapport (PDF ou Markdown).
+        // Relancer (action principale, toute la largeur), puis télécharger le
+        // rapport (PDF ou Markdown).
         let actions = div()
             .flex()
-            .flex_wrap()
+            .flex_col()
             .gap(metrics::SPACE_2)
             .child(rerun_button(
                 self.usage(),
                 self.is_analyzing(&project.path),
+                true,
                 theme,
                 cx,
             ))
             .child(
-                Button::new("export-pdf", "Rapport PDF", theme)
-                    .icon(IconName::Export)
-                    .on_click(cx.listener(|app, _, _, cx| app.export_report(Format::Pdf, cx))),
-            )
-            .child(
-                Button::new("export-markdown", "Markdown", theme)
-                    .variant(ButtonVariant::Ghost)
-                    .on_click(cx.listener(|app, _, _, cx| app.export_report(Format::Markdown, cx))),
+                div()
+                    .flex()
+                    .gap(metrics::SPACE_2)
+                    .child(
+                        div().flex_1().child(
+                            Button::new("export-pdf", "Rapport PDF", theme)
+                                .icon(IconName::Export)
+                                .full_width()
+                                .on_click(
+                                    cx.listener(|app, _, _, cx| app.export_report(Format::Pdf, cx)),
+                                ),
+                        ),
+                    )
+                    .child(
+                        div().flex_1().child(
+                            Button::new("export-markdown", "Markdown", theme)
+                                .full_width()
+                                .on_click(cx.listener(|app, _, _, cx| {
+                                    app.export_report(Format::Markdown, cx)
+                                })),
+                        ),
+                    ),
             )
             .into_any_element();
         // Bouton « Réduire » en haut à droite du panneau.
@@ -262,6 +305,49 @@ impl HeraldApp {
 }
 
 const TITLE_SIZE: gpui::Pixels = px(22.);
+
+/// Bandeau du Plan filtré : la catégorie, et « Tout afficher » pour retirer le filtre.
+fn filter_notice(
+    category: Category,
+    empty: bool,
+    theme: Theme,
+    cx: &mut Context<HeraldApp>,
+) -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .gap(metrics::SPACE_3)
+        .px(metrics::SPACE_4)
+        .py(metrics::SPACE_2)
+        .rounded(metrics::RADIUS_LG)
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.bg_surface)
+        .text_size(metrics::TEXT_SM)
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_color(if empty {
+                    theme.success
+                } else {
+                    theme.ink_muted
+                })
+                .child(if empty {
+                    format!("Aucun problème dans la catégorie {}.", category.label())
+                } else {
+                    format!("Seulement la catégorie {}.", category.label())
+                }),
+        )
+        .child(
+            Button::new("plan-filter-clear", "Tout afficher", theme)
+                .variant(ButtonVariant::Ghost)
+                .on_click(cx.listener(|app, _, _, cx| {
+                    app.category_filter = None;
+                    cx.notify();
+                })),
+        )
+}
 
 fn caption(text: &str, theme: Theme) -> impl IntoElement {
     div()
@@ -396,10 +482,9 @@ fn plan_row(
                         .child("Corrigé, à confirmer"),
                 )
             } else {
-                this.child(
-                    Button::new(("plan-open", gi), "Ouvrir", theme)
-                        .on_click(cx.listener(move |app, _, _, cx| app.open_review(gi, cx))),
-                )
+                this.child(Button::new(("plan-open", gi), "Ouvrir", theme).on_click(
+                    cx.listener(move |app, _, window, cx| app.open_group_in_code(gi, window, cx)),
+                ))
             }
         })
         .child(
@@ -480,7 +565,48 @@ fn collapsed_aside(
         .into_any_element()
 }
 
-/// Colonne de droite : note actuelle → note estimée, barre, palier suivant.
+/// Phrase du panneau de la note : l'évolution, puis le palier suivant et la
+/// correction qui suffit à l'atteindre, ou l'effet des corrections cochées.
+fn score_sentence(
+    delta: Option<i16>,
+    next: Option<(&str, u8)>,
+    enough: Option<(&str, usize)>,
+    estimated: Option<(&str, u8)>,
+) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    match delta {
+        Some(0) => parts.push("Stable.".to_owned()),
+        Some(d) if d > 0 => parts.push(format!(
+            "+{d} point{} depuis l'analyse précédente.",
+            if d > 1 { "s" } else { "" }
+        )),
+        Some(d) => parts.push(format!(
+            "−{} point{} depuis l'analyse précédente.",
+            d.unsigned_abs(),
+            if d.unsigned_abs() > 1 { "s" } else { "" }
+        )),
+        None => {}
+    }
+    if let Some((grade, score)) = estimated {
+        parts.push(format!("Avec les corrections cochées : {grade}, {score}."));
+    } else {
+        match (next, enough) {
+            (Some((grade, n)), Some((rule, count))) => parts.push(format!(
+                "Encore {n} point{} pour {grade} : corriger « {rule} » ({count}) suffit.",
+                if n > 1 { "s" } else { "" }
+            )),
+            (Some((grade, n)), None) => parts.push(format!(
+                "Encore {n} point{} pour {grade}.",
+                if n > 1 { "s" } else { "" }
+            )),
+            (None, _) => parts.push("La meilleure note est atteinte.".to_owned()),
+        }
+    }
+    parts.join(" ")
+}
+
+/// Panneau de la note, minimal : la lettre en très grand, la note sur 100,
+/// une phrase, puis la relance et les exports en bas.
 fn score_aside(
     report: &AnalysisReport,
     order: &[usize],
@@ -490,39 +616,26 @@ fn score_aside(
     let score = report.summary.score;
     let projected = report.projected_score();
     let current = Grade::from_score(score);
-    let estimated = Grade::from_score(projected);
-    let checked = order
-        .iter()
-        .filter(|&&gi| report.is_group_resolved(gi))
-        .count();
     let next = report.next_grade();
-
-    let big = |grade: Grade| {
-        div()
-            .font_family(fonts::DISPLAY)
-            .font_weight(FontWeight::BOLD)
-            .text_size(BIG_GRADE)
-            .line_height(BIG_GRADE)
-            .text_color(grade_color(grade, &theme))
-            .child(grade.label())
-    };
-    let stat = |label: &'static str, value: String, color: gpui::Hsla| {
-        div()
-            .flex()
-            .justify_between()
-            .child(div().text_color(theme.ink_muted).child(label))
-            .child(
-                div()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(color)
-                    .child(value),
-            )
-    };
-    let summary: SharedString = if projected > score {
-        format!("{score} aujourd'hui, {projected} estimés avec les corrections cochées.").into()
-    } else {
-        format!("{score} aujourd'hui. Cochez une correction pour voir la note estimée.").into()
-    };
+    // La première correction du plan qui, seule, atteint le palier suivant.
+    let enough = next.and_then(|next| {
+        order
+            .iter()
+            .copied()
+            .filter(|&gi| !report.is_group_resolved(gi))
+            .find(|&gi| report.base_gain(gi) >= f32::from(next.points_needed))
+            .map(|gi| {
+                let group = &report.groups()[gi];
+                (group.title.to_string(), group.occurrences.len())
+            })
+    });
+    let estimated_label = Grade::from_score(projected).label();
+    let sentence = score_sentence(
+        report.summary.delta(),
+        next.map(|n| (n.grade.label(), n.points_needed)),
+        enough.as_ref().map(|(t, n)| (t.as_str(), *n)),
+        (projected > score).then_some((estimated_label, projected)),
+    );
 
     div()
         .w(ASIDE_WIDTH)
@@ -530,7 +643,6 @@ fn score_aside(
         .h_full()
         .flex()
         .flex_col()
-        .gap(metrics::SPACE_5)
         .px(metrics::SPACE_6)
         .py(metrics::SPACE_6)
         .bg(theme.bg_surface)
@@ -538,109 +650,66 @@ fn score_aside(
         .border_color(theme.border)
         .child(
             div()
-                .text_size(metrics::TEXT_XS)
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.ink_soft)
-                .child("VOTRE NOTE"),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(metrics::SPACE_3)
-                .child(big(current))
-                .when(estimated != current, |this| {
-                    this.child(
-                        div()
-                            .text_size(metrics::TEXT_XL)
-                            .text_color(theme.ink_soft)
-                            .child("→"),
-                    )
-                    .child(big(estimated))
-                }),
-        )
-        .child(div().text_color(theme.ink_muted).child(summary))
-        .child(
-            div()
+                .flex_1()
                 .flex()
                 .flex_col()
-                .gap(metrics::SPACE_1)
+                .items_center()
+                .justify_center()
+                .gap(metrics::SPACE_3)
                 .child(
                     div()
-                        .relative()
-                        .h(BAR_H)
-                        .rounded_full()
-                        .overflow_hidden()
-                        .bg(theme.track)
-                        .child(
-                            div()
-                                .absolute()
-                                .top_0()
-                                .bottom_0()
-                                .left_0()
-                                .w(relative(f32::from(score) / 100.))
-                                .bg(theme.accent),
-                        )
-                        .when(projected > score, |this| {
-                            this.child(
-                                div()
-                                    .absolute()
-                                    .top_0()
-                                    .bottom_0()
-                                    .left(relative(f32::from(score) / 100.))
-                                    .w(relative(f32::from(projected - score) / 100.))
-                                    .bg(theme.success),
-                            )
-                        }),
+                        .font_family(fonts::DISPLAY)
+                        .font_weight(FontWeight::BOLD)
+                        .text_size(BIG_GRADE)
+                        .line_height(BIG_GRADE)
+                        .text_color(grade_color(current, &theme))
+                        .child(current.label()),
                 )
                 .child(
                     div()
-                        .flex()
-                        .justify_between()
-                        .text_size(metrics::TEXT_XS)
-                        .text_color(theme.ink_soft)
-                        .child("0")
-                        .child(format!("{score} aujourd'hui"))
-                        .child("100"),
-                ),
-        )
-        // Relancer l'analyse, juste sous la note.
-        .child(div().flex().child(rerun))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap(metrics::SPACE_2)
-                .pt(metrics::SPACE_4)
-                .border_t_1()
-                .border_color(theme.border_soft)
-                .child(stat(
-                    "Corrections cochées",
-                    format!("{checked} sur {}", order.len()),
-                    theme.ink,
-                ))
-                .child(stat(
-                    "Points en attente",
-                    format!("+{}", projected.saturating_sub(score)),
-                    theme.success,
-                ))
-                .child(stat(
-                    "Prochain palier",
-                    match next {
-                        Some(next) => format!("{} dans {} pts", next.grade, next.points_needed),
-                        None => "Note maximale".to_owned(),
-                    },
-                    theme.ink,
-                )),
-        )
-        .child(div().flex_1())
-        .child(
-            div()
-                .text_size(metrics::TEXT_SM)
-                .text_color(theme.ink_soft)
+                        .text_size(metrics::TEXT_LG)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(format!("{score} sur 100")),
+                )
                 .child(
-                    "Les corrections cochées sont confirmées à la prochaine analyse. \
-                     Une correction non faite repasse dans la liste.",
+                    div()
+                        .max_w(px(240.))
+                        .text_center()
+                        .text_size(metrics::TEXT_SM)
+                        .line_height(px(21.))
+                        .text_color(theme.ink_muted)
+                        .child(sentence),
                 ),
         )
+        .child(rerun)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::score_sentence;
+
+    #[test]
+    fn the_score_panel_says_it_in_one_sentence() {
+        assert_eq!(
+            score_sentence(
+                Some(0),
+                Some(("A+", 2)),
+                Some(("Ligne trop longue", 13)),
+                None
+            ),
+            "Stable. Encore 2 points pour A+ : corriger « Ligne trop longue » (13) suffit."
+        );
+        assert_eq!(
+            score_sentence(Some(6), Some(("A+", 1)), None, None),
+            "+6 points depuis l'analyse précédente. Encore 1 point pour A+."
+        );
+        assert_eq!(
+            score_sentence(None, Some(("A+", 2)), None, Some(("A+", 98))),
+            "Avec les corrections cochées : A+, 98."
+        );
+        assert_eq!(
+            score_sentence(Some(-1), None, None, None),
+            "−1 point depuis l'analyse précédente. La meilleure note est atteinte."
+        );
+    }
 }

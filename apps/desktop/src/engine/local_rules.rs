@@ -79,9 +79,6 @@ pub struct Measure {
     pub true_positives: u32,
     /// Relevés étiquetés.
     pub labeled: u32,
-    /// Relevés sur tout le corpus (échantillonnés pour l'étiquetage).
-    #[serde(default)]
-    pub total: u32,
 }
 
 impl Measure {
@@ -461,7 +458,6 @@ mod tests {
         let measure = Measure {
             true_positives: 8,
             labeled: 10,
-            total: 40,
         };
         assert_eq!(measure.precision(), Some(0.8));
     }

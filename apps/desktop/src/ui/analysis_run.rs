@@ -1,6 +1,7 @@
-//! Analyse d'un projet, affichée discrètement sur la page du projet (pas d'écran
-//! dédié) : une carte avec l'étape en cours, une barre de progression et le fichier
-//! en cours ; l'app reste utilisable pendant l'analyse.
+//! Analyse d'un projet, affichée discrètement en haut de la page du projet (pas
+//! d'écran dédié) : une carte avec l'étape réelle du moteur, les fichiers lus,
+//! la barre de progression et le dernier fichier lu ; l'app reste utilisable
+//! pendant l'analyse.
 //!
 //! Les étapes sont réelles (signalées par le moteur). Le moteur ne
 //! dit pas quel fichier il traite : pendant l'étape « Analyse », le fichier affiché
@@ -18,7 +19,7 @@ use gpui::{
 
 use super::app::HeraldApp;
 use super::components::{Button, ButtonVariant, Icon, IconName, ProgressBar};
-use super::home::surface;
+use super::home::{count_label, surface};
 use super::resource_monitor::{self, ResourceTrace};
 use super::service::Quota;
 use crate::engine::{self, Analysis, Phase, SharedPhase, cve};
@@ -35,6 +36,8 @@ const MAX_ESTIMATE_MS: f32 = 90_000.;
 const GAUGE_SIZE: Pixels = px(56.);
 const GAUGE_STROKE: Pixels = px(6.);
 const SPINNER_SIZE: Pixels = px(12.);
+/// Étapes de l'analyse (voir `STEP_NAMES`).
+const STEPS: usize = 6;
 
 /// Avancement d'une analyse, lu par la vue d'ensemble.
 pub(super) struct RunSnapshot {
@@ -58,8 +61,8 @@ pub(super) struct AnalysisRun {
     files: Vec<SharedString>,
     /// Indice dans `files` du fichier affiché.
     current: Option<usize>,
-    step_started: [Option<Instant>; 5],
-    step_took: [Option<Duration>; 5],
+    step_started: [Option<Instant>; STEPS],
+    step_took: [Option<Duration>; STEPS],
     percent: u32,
     rules: Option<usize>,
     outcome: Option<Outcome>,
@@ -180,7 +183,7 @@ impl HeraldApp {
             }
         });
 
-        let mut step_started = [None; 5];
+        let mut step_started = [None; STEPS];
         step_started[0] = Some(Instant::now());
         self.analysis_run = Some(AnalysisRun {
             path,
@@ -188,7 +191,7 @@ impl HeraldApp {
             files: Vec::new(),
             current: None,
             step_started,
-            step_took: [None; 5],
+            step_took: [None; STEPS],
             percent: 0,
             rules: None,
             outcome: None,
@@ -220,8 +223,9 @@ impl HeraldApp {
                 },
                 quota,
             )) => {
-                run.enter_step(4, now);
-                run.step_took[4] = Some(Duration::ZERO);
+                run.enter_step(STEPS - 1, now);
+                let last = run.step_started[STEPS - 1].unwrap_or(now);
+                run.step_took[STEPS - 1] = Some(now - last);
                 run.percent = 100;
                 run.current = None;
                 run.outcome = Some(Outcome {
@@ -241,6 +245,8 @@ impl HeraldApp {
                 if let Some(ix) = self.projects.iter().position(|p| p.path == path) {
                     // Sauvegarde locale : rapport (sans le code) et dépendances.
                     let local_id = store::save_analysis(&path, &report);
+                    self.score_history
+                        .insert(path.clone(), store::history(&path));
                     store::save_dependencies(&path, &dependencies);
                     self.dependencies.insert(path.clone(), dependencies.clone());
                     let name = self.projects[ix].name.to_string();
@@ -256,15 +262,23 @@ impl HeraldApp {
                     }
                     self.refresh_ide(&path, cx);
                     self.after_analysis(path, name, dependencies, score, local_id, cx);
-                    // Développement : `HERALD_DEV_OPEN=list|review|code|deps` ouvre l'écran Problèmes.
+                    // Développement : `HERALD_DEV_OPEN=general|list|patterns|code|deps` ouvre l'écran Problèmes.
                     #[cfg(debug_assertions)]
                     if let Ok(view) = std::env::var("HERALD_DEV_OPEN") {
                         self.workspace_view = match view.as_str() {
                             "code" => super::app::WorkspaceView::Code,
                             "deps" => super::app::WorkspaceView::Dependencies,
-                            "review" => super::app::WorkspaceView::Review,
+                            "patterns" => super::app::WorkspaceView::Patterns,
+                            "general" => super::app::WorkspaceView::General,
                             _ => super::app::WorkspaceView::List,
                         };
+                        // `HERALD_DEV_PATTERN=<début du nom>` ouvre la page d'un pattern.
+                        if let Ok(name) = std::env::var("HERALD_DEV_PATTERN") {
+                            self.open_pattern = crate::model::patterns::PATTERNS
+                                .iter()
+                                .map(|pattern| pattern.name)
+                                .find(|candidate| candidate.starts_with(name.as_str()));
+                        }
                         self.analysis_run = None;
                         self.screen = super::app::Screen::Analysis;
                         return cx.notify();
@@ -443,7 +457,9 @@ impl HeraldApp {
             );
         }
 
-        let current_file = run.current.and_then(|ix| run.files.get(ix)).cloned();
+        // En cours : une carte compacte, avec les chiffres réels du moteur.
+        let progress = run.progress();
+        let (title, facts, detail) = (progress.title, progress.facts, progress.detail);
         Some(
             card.child(
                 div()
@@ -464,11 +480,21 @@ impl HeraldApp {
                                     .min_w_0()
                                     .truncate()
                                     .font_weight(FontWeight::MEDIUM)
-                                    .child(run.phase_label()),
+                                    .child(title),
                             )
                             .child(
                                 div()
                                     .flex_none()
+                                    .text_size(metrics::TEXT_SM)
+                                    .text_color(theme.ink_muted)
+                                    .child(facts),
+                            )
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .w(px(44.))
+                                    .flex()
+                                    .justify_end()
                                     .font_family(fonts::MONO)
                                     .text_size(metrics::TEXT_SM)
                                     .text_color(theme.ink_muted)
@@ -482,9 +508,7 @@ impl HeraldApp {
                             .font_family(fonts::MONO)
                             .text_size(metrics::TEXT_SM)
                             .text_color(theme.ink_soft)
-                            .child(current_file.unwrap_or_else(|| {
-                                "Analyse locale · aucun fichier n'est envoyé".into()
-                            })),
+                            .child(detail),
                     ),
             )
             .into_any_element(),
@@ -500,6 +524,8 @@ impl AnalysisRun {
             Phase::Rules => 1,
             Phase::Reading => 2,
             Phase::Analyzing { .. } => 3,
+            Phase::Dependencies => 4,
+            Phase::Scoring => 5,
         }
     }
 
@@ -522,11 +548,16 @@ impl AnalysisRun {
     /// Fait avancer l'étape, la jauge et le fichier affiché.
     fn advance(&mut self) {
         let now = Instant::now();
-        let (phase, files, rules) = match self.phase.lock() {
+        let (phase, files, rules, done) = match self.phase.lock() {
             Ok(progress) => (
                 progress.phase.clone(),
-                progress.files.clone(),
+                if self.files.is_empty() {
+                    progress.files.clone()
+                } else {
+                    Vec::new()
+                },
                 progress.rules,
+                progress.done,
             ),
             Err(_) => return,
         };
@@ -546,7 +577,13 @@ impl AnalysisRun {
                 let elapsed = (now - started).as_secs_f32() * 1000.;
                 let estimate =
                     (2_000. + files as f32 * 100.).clamp(MIN_ESTIMATE_MS, MAX_ESTIMATE_MS);
-                let ratio = (elapsed / estimate).min(1.);
+                // Fichiers réellement terminés (rapportés par le moteur) ;
+                // avant le premier, l'estimation au temps.
+                let ratio = if done > 0 && files > 0 {
+                    (done as f32 / files as f32).min(1.)
+                } else {
+                    (elapsed / estimate).min(1.)
+                };
                 if !self.files.is_empty() {
                     let position =
                         ((ratio * self.files.len() as f32) as usize).min(self.files.len() - 1);
@@ -555,6 +592,8 @@ impl AnalysisRun {
                 let eased = 1. - (1. - ratio) * (1. - ratio);
                 (8. + (PROGRESS_CAP - 8.) * eased) as u32
             }
+            Phase::Dependencies => PROGRESS_CAP as u32 + 2,
+            Phase::Scoring => PROGRESS_CAP as u32 + 5,
         };
         self.percent = self.percent.max(percent);
     }
@@ -640,6 +679,106 @@ fn ring(value: f32, color: Hsla, track: Hsla) -> impl IntoElement {
     .size_full()
 }
 
+/// Durée en secondes, à la française (« 2,4 s »).
+fn seconds(duration: Duration) -> String {
+    format!("{:.1} s", duration.as_secs_f32()).replace('.', ",")
+}
+
+/// Ce qu'on lit de l'avancement partagé avec le moteur.
+struct Live {
+    done: usize,
+    last_file: Option<String>,
+    by_severity: [usize; 3],
+}
+
+/// Avancement lisible d'une analyse en cours (carte ou bandeau du héraut).
+pub(super) struct RunProgress {
+    pub(super) title: String,
+    /// Temps écoulé, problèmes et critiques trouvés.
+    pub(super) facts: String,
+    /// Ce que fait le moteur, ou le dernier fichier lu.
+    pub(super) detail: SharedString,
+    pub(super) percent: u32,
+}
+
+impl HeraldApp {
+    /// Avancement de l'analyse en cours du projet affiché.
+    pub(super) fn run_progress(&self) -> Option<RunProgress> {
+        let run = self.analysis_run.as_ref()?;
+        let project = self.project()?;
+        (run.path == project.path && !run.is_over()).then(|| run.progress())
+    }
+
+    /// L'analyse du projet affiché a échoué (sa carte reste à montrer).
+    pub(super) fn run_failed(&self) -> bool {
+        self.analysis_run.as_ref().is_some_and(|run| {
+            run.failure.is_some() && self.project().is_some_and(|p| p.path == run.path)
+        })
+    }
+}
+
+impl AnalysisRun {
+    fn progress(&self) -> RunProgress {
+        let live = self.live();
+        let elapsed = self.step_started[0]
+            .map(|start| Instant::now() - start)
+            .unwrap_or_default();
+        let total = self.files.len();
+        let analyzing_files = self.step_started[3].is_some() && self.step_took[3].is_none();
+        let title = if analyzing_files && total > 0 {
+            format!(
+                "Analyse en cours · {} / {total} fichiers",
+                live.done.min(total)
+            )
+        } else {
+            self.phase_label()
+        };
+        let found: usize = live.by_severity.iter().sum();
+        let mut facts = vec![seconds(elapsed)];
+        if found > 0 {
+            facts.push(count_label(
+                found as u32,
+                "problème trouvé",
+                "problèmes trouvés",
+            ));
+            if live.by_severity[0] > 0 {
+                facts.push(count_label(
+                    live.by_severity[0] as u32,
+                    "critique",
+                    "critiques",
+                ));
+            }
+        }
+        let detail: SharedString = match (&live.last_file, analyzing_files, live.done) {
+            (_, true, 0) => "Compilation des règles…".into(),
+            (_, true, done) if done >= total => "Analyse croisée entre les fichiers…".into(),
+            (Some(file), true, _) => file.clone().into(),
+            _ => "Analyse locale · aucun fichier n'est envoyé".into(),
+        };
+        RunProgress {
+            title,
+            facts: facts.join(" · "),
+            detail,
+            percent: self.percent.min(100),
+        }
+    }
+
+    fn live(&self) -> Live {
+        match self.phase.lock() {
+            Ok(progress) => Live {
+                done: progress.done,
+                last_file: progress.last_file.clone(),
+                by_severity: progress.by_severity,
+            },
+            Err(_) => Live {
+                done: 0,
+                last_file: None,
+                by_severity: [0; 3],
+            },
+        }
+    }
+}
+
 /// Petite icône qui tourne (aussi utilisée par la barre latérale).
 pub(super) fn spinner(theme: Theme) -> impl IntoElement {
     svg()
@@ -666,6 +805,13 @@ mod tests {
         assert_eq!(AnalysisRun::step_of(&Phase::Preparing), 0);
         assert_eq!(AnalysisRun::step_of(&Phase::Rules), 1);
         assert_eq!(AnalysisRun::step_of(&Phase::Analyzing { files: 3 }), 3);
+        assert_eq!(AnalysisRun::step_of(&Phase::Scoring), STEPS - 1);
+    }
+
+    #[test]
+    fn step_durations_use_a_decimal_comma() {
+        assert_eq!(seconds(Duration::from_millis(2_400)), "2,4 s");
+        assert_eq!(seconds(Duration::ZERO), "0,0 s");
     }
 }
 

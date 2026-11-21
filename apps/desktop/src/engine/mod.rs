@@ -14,9 +14,11 @@
 
 pub mod collect;
 pub mod cve;
+pub mod fix_command;
 pub mod local_rules;
 pub mod lockfile;
 pub mod rules;
+pub mod run_command;
 pub mod workspace;
 
 use std::collections::{HashMap, HashSet};
@@ -50,6 +52,10 @@ pub enum Phase {
     Analyzing {
         files: usize,
     },
+    /// Relevé des dépendances (fichiers de verrouillage).
+    Dependencies,
+    /// Calcul de la note et du rapport.
+    Scoring,
 }
 
 impl Phase {
@@ -59,18 +65,89 @@ impl Phase {
             Self::Rules => "Chargement des règles…".to_owned(),
             Self::Reading => "Lecture des fichiers…".to_owned(),
             Self::Analyzing { files } => format!("Analyse de {files} fichiers…"),
+            Self::Dependencies => "Relevé des dépendances…".to_owned(),
+            Self::Scoring => "Calcul de la note…".to_owned(),
         }
     }
 }
 
 /// Avancement partagé avec l'interface : étape, puis fichiers retenus (pour
-/// l'animation qui parcourt le projet).
+/// l'animation qui parcourt le projet), et ce que le moteur trouve au fil de
+/// l'analyse (fil d'annonces du héraut).
 #[derive(Debug, Default)]
 pub struct Progress {
     pub phase: Phase,
     pub files: Vec<String>,
     /// Règles téléchargées ; `Some(0)` : catalogue intégré au moteur (hors ligne).
     pub rules: Option<usize>,
+    /// Fichiers dont l'analyse est terminée.
+    pub done: usize,
+    /// Fichiers terminés avec au moins un relevé.
+    pub flagged: usize,
+    /// Fichiers avec des relevés, dans l'ordre où leur analyse s'est terminée
+    /// (les plus récents seulement, voir `MAX_FINDINGS`).
+    pub findings: Vec<Finding>,
+    /// Problèmes trouvés jusqu'ici, par catégorie : (problèmes, critiques).
+    pub by_category: HashMap<Category, (usize, usize)>,
+    /// Problèmes trouvés jusqu'ici, par gravité : critiques, attention, info.
+    pub by_severity: [usize; 3],
+    /// Dernier fichier dont l'analyse est terminée.
+    pub last_file: Option<String>,
+}
+
+/// Fichiers avec relevés gardés pour le fil d'annonces.
+const MAX_FINDINGS: usize = 50;
+
+/// Un fichier dont l'analyse a relevé des problèmes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Finding {
+    pub path: String,
+    /// Moment depuis le début de l'analyse des fichiers.
+    pub at: Duration,
+    pub count: usize,
+    pub critical: usize,
+    /// Titre de la règle du relevé le plus grave.
+    pub top: String,
+    pub severity: Severity,
+}
+
+impl Progress {
+    /// Enregistre la fin de l'analyse d'un fichier et ses relevés.
+    fn record(&mut self, path: &str, issues: &[EngineIssue], at: Duration) {
+        self.done += 1;
+        self.last_file = Some(path.to_owned());
+        let Some(worst) = issues
+            .iter()
+            .min_by_key(|issue| severity_of(&issue.severity))
+        else {
+            return;
+        };
+        self.flagged += 1;
+        let mut critical = 0;
+        for issue in issues {
+            self.by_severity[severity_of(&issue.severity) as usize] += 1;
+            let entry = self
+                .by_category
+                .entry(category_of(&issue.category))
+                .or_default();
+            entry.0 += 1;
+            if severity_of(&issue.severity) == Severity::Critical {
+                entry.1 += 1;
+                critical += 1;
+            }
+        }
+        self.findings.push(Finding {
+            path: path.to_owned(),
+            at,
+            count: issues.len(),
+            critical,
+            top: rule_title(&worst.rule),
+            severity: severity_of(&worst.severity),
+        });
+        if self.findings.len() > MAX_FINDINGS {
+            self.findings.remove(0);
+        }
+    }
 }
 
 pub type SharedPhase = Arc<Mutex<Progress>>;
@@ -127,17 +204,32 @@ pub fn analyze_project(request: Request<'_>, phase: &SharedPhase) -> Result<Anal
         files,
         git: workspace::git_context(request.path),
     };
-    let response = runtime().block_on(herald_engine::analyze(&engine_request, &config));
+    // Chaque fichier terminé alimente le fil d'annonces de l'interface.
+    let files_started = Instant::now();
+    let on_file = |path: &str, issues: &[EngineIssue]| {
+        if let Ok(mut progress) = phase.lock() {
+            progress.record(path, issues, files_started.elapsed());
+        }
+    };
+    let response = runtime().block_on(herald_engine::analyze_with_progress(
+        &engine_request,
+        &config,
+        &on_file,
+    ));
     let duration = started.elapsed();
 
+    set_phase(phase, Phase::Dependencies);
+    let dependencies = cve::dependencies(request.path, &engine_request.files);
+    set_phase(phase, Phase::Scoring);
+    let report = build_report(
+        &engine_request.files,
+        &response,
+        request.previous_score,
+        duration,
+    );
     Ok(Analysis {
-        report: build_report(
-            &engine_request.files,
-            &response,
-            request.previous_score,
-            duration,
-        ),
-        dependencies: cve::dependencies(request.path, &engine_request.files),
+        report,
+        dependencies,
     })
 }
 
@@ -319,7 +411,6 @@ fn build_report(
 fn source_file(path: &str, code: &str) -> SourceFile {
     SourceFile {
         path: path.to_owned().into(),
-        first_line: 1,
         lines: code
             .lines()
             .map(|line| SharedString::from(line.to_owned()))
@@ -389,7 +480,14 @@ mod tests {
         assert!(report.summary.score < 100);
         assert_eq!(report.projected_score(), report.summary.score);
         let progress = phase.lock().unwrap();
-        assert_eq!(progress.phase, Phase::Analyzing { files: 1 });
+        // Dernière étape : la note, après les dépendances.
+        assert_eq!(progress.phase, Phase::Scoring);
+        let in_files = report
+            .issues
+            .iter()
+            .filter(|issue| issue.file.as_ref() != GIT_PSEUDO_FILE)
+            .count();
+        assert_eq!(progress.by_severity.iter().sum::<usize>(), in_files);
         assert_eq!(progress.files, vec!["src/config.js".to_owned()]);
     }
 }

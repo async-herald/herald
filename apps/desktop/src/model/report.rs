@@ -54,15 +54,7 @@ impl CategoryScore {
 #[derive(Clone, Debug)]
 pub struct SourceFile {
     pub path: SharedString,
-    pub first_line: u32,
     pub lines: Vec<SharedString>,
-}
-
-impl SourceFile {
-    /// Lignes numérotées de l'extrait.
-    pub fn numbered_lines(&self) -> impl Iterator<Item = (u32, &SharedString)> {
-        (self.first_line..).zip(&self.lines)
-    }
 }
 
 /// Résultat complet d'une analyse.
@@ -209,17 +201,6 @@ impl AnalysisReport {
         ) as u8
     }
 
-    /// Groupe (et rang dans ses occurrences) d'un problème.
-    pub fn group_of(&self, ix: usize) -> Option<(usize, usize)> {
-        self.groups.iter().enumerate().find_map(|(gi, group)| {
-            group
-                .occurrences
-                .iter()
-                .position(|&occ| occ == ix)
-                .map(|pos| (gi, pos))
-        })
-    }
-
     /// Plan de correction : groupes visibles, du plus rentable au moins
     /// rentable, et combien des premiers suffisent pour gagner un palier
     /// (au plus `max_quick`).
@@ -362,10 +343,6 @@ impl AnalysisReport {
             .filter(|&gi| category.is_none_or(|c| self.groups[gi].category == c))
             .collect()
     }
-
-    pub fn source(&self, path: &str) -> Option<&SourceFile> {
-        self.sources.iter().find(|source| source.path == path)
-    }
 }
 
 /// Regroupe les problèmes par règle, dans l'ordre de première apparition.
@@ -445,7 +422,6 @@ mod tests {
         assert_eq!(report.groups()[order[0]].rule.as_ref(), "eval-usage");
         assert!(report.base_gain(order[0]) >= report.base_gain(order[1]));
         assert!((1..=2).contains(&quick));
-        assert_eq!(report.group_of(2), Some((order[0], 1)));
         assert!(report.score_with(&order) >= report.score_with(&order[..1]));
     }
 

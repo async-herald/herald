@@ -61,6 +61,12 @@ impl Button {
         self
     }
 
+    /// Occupe toute la largeur, libellé centré (formulaires, action principale d'un panneau).
+    pub fn full_width(mut self) -> Self {
+        self.full_width = true;
+        self
+    }
+
     pub fn on_click(
         mut self,
         handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,

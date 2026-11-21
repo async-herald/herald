@@ -10,7 +10,7 @@ use super::components::{Button, ButtonVariant, IconName};
 use super::home::{page_title, surface};
 use super::rules::rule_switch;
 use crate::store;
-use crate::theme::{Theme, metrics};
+use crate::theme::{Theme, ThemeMode, metrics};
 
 /// Réglage local : revérifier les CVE des projets au lancement.
 pub(super) const CVE_ON_START: &str = "cve_on_start";
@@ -88,6 +88,47 @@ impl HeraldApp {
         let size = store::database_size();
 
         let account_section = self.render_account_section(theme, cx);
+
+        let mode = self.theme_mode;
+        let appearance_section = section("Apparence", theme).child(row(
+            "Thème",
+            "Clair, sombre, ou selon l'apparence de macOS.",
+            theme,
+            div()
+                .flex()
+                .p(px(2.))
+                .gap(px(2.))
+                .rounded(metrics::RADIUS)
+                .bg(theme.bg_hover)
+                .border_1()
+                .border_color(theme.border)
+                .children(ThemeMode::ALL.into_iter().map(|choice| {
+                    let on = choice == mode;
+                    div()
+                        .id(choice.key())
+                        .px(metrics::SPACE_3)
+                        .py(px(4.))
+                        .rounded(metrics::RADIUS)
+                        .text_size(metrics::TEXT_SM)
+                        .cursor_pointer()
+                        .when(on, |this| {
+                            this.bg(theme.bg_surface)
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .border_1()
+                                .border_color(theme.border)
+                        })
+                        .when(!on, |this| {
+                            this.text_color(theme.ink_muted)
+                                .hover(|style| style.text_color(theme.ink))
+                        })
+                        .on_click(cx.listener(move |app, _, _, cx| {
+                            app.theme_mode = choice;
+                            store::set_text_setting(super::app::THEME_MODE, choice.key());
+                            cx.notify();
+                        }))
+                        .child(choice.label())
+                })),
+        ));
 
         let analysis_section = section("Analyse", theme)
             .child(row(
@@ -174,7 +215,7 @@ impl HeraldApp {
                 if busy {
                     "Enregistrement…"
                 } else {
-                    "Analyse et données locales"
+                    "Apparence, analyse et données locales"
                 },
                 theme,
             )))
@@ -187,6 +228,7 @@ impl HeraldApp {
                     .child(text)
             }))
             .children(account_section)
+            .child(appearance_section)
             .child(analysis_section)
             .child(data_section)
             .child(about_section)

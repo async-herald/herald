@@ -347,6 +347,14 @@ impl HeraldApp {
         cx: &mut Context<Self>,
     ) {
         self.workspace_view = view;
+        // Un clic sur l'onglet Patterns ramène à la grille.
+        if view == WorkspaceView::Patterns {
+            self.open_pattern = None;
+        }
+        // Un clic sur l'onglet Plan l'affiche en entier (sans filtre de catégorie).
+        if view == WorkspaceView::List {
+            self.category_filter = None;
+        }
         if view == WorkspaceView::Code {
             let first_issue = self.ide_mut().is_some_and(|ide| ide.tabs.is_empty());
             if first_issue {
@@ -763,7 +771,7 @@ impl HeraldApp {
 
     /// Lignes `range` de l'explorateur (seules les lignes visibles sont construites).
     fn explorer_items(&mut self, range: Range<usize>, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let theme = Theme::light();
+        let theme = Theme::current();
         let Some(ide) = self.ide() else {
             return Vec::new();
         };

@@ -33,6 +33,18 @@ use crate::types::{AnalyzeRequest, AnalyzeResponse, FileResult, Issue};
 const ANALYZE_BUDGET: Duration = Duration::from_secs(50);
 
 pub async fn analyze(req: &AnalyzeRequest, config: &Config) -> AnalyzeResponse {
+    analyze_with_progress(req, config, &|_, _| {}).await
+}
+
+/// Comme [`analyze`], en appelant `on_file` après l'analyse de chaque fichier,
+/// avec ses relevés propres (hors analyses transverses, faites à la fin).
+/// Les fichiers sont analysés en parallèle : `on_file` est appelé depuis les
+/// fils de calcul, dans l'ordre où ils se terminent.
+pub async fn analyze_with_progress(
+    req: &AnalyzeRequest,
+    config: &Config,
+    on_file: &(dyn Fn(&str, &[Issue]) + Sync),
+) -> AnalyzeResponse {
     // Règles de la base si fournies (data-driven), sinon catalogue compilé.
     let compiled = if config.rule_sources.is_empty() {
         None
@@ -69,6 +81,7 @@ pub async fn analyze(req: &AnalyzeRequest, config: &Config) -> AnalyzeResponse {
                 // langage reconnu, donc routées par nom de fichier plutôt que
                 // par la DSL — hors périmètre de `retain_prod` (pas du code).
                 issues.extend(rules::run_devops(&f.path, &f.code, config));
+                on_file(&f.path, &issues);
                 ((lang, tree), issues)
             })
             .collect();

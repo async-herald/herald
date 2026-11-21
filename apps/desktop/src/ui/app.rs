@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use gpui::{
-    ExternalPaths, PathPromptOptions, Pixels, PromptButton, PromptLevel, SharedString, Window, div,
-    prelude::*, px,
+    ExternalPaths, PathPromptOptions, Pixels, PromptButton, PromptLevel, SharedString, Window,
+    WindowAppearance, div, prelude::*, px,
 };
 
 use super::analysis_run::AnalysisRun;
@@ -14,7 +14,10 @@ use crate::model::{
     self, Advisory, AnalysisReport, Category, Grade, IssueGroup, Project, RuleCatalog,
 };
 use crate::store;
-use crate::theme::{Theme, fonts, metrics};
+use crate::theme::{Theme, ThemeMode, fonts, metrics};
+
+/// Clé du réglage d'apparence.
+pub(super) const THEME_MODE: &str = "theme_mode";
 
 /// Écran affiché dans la fenêtre.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,10 +36,12 @@ pub(super) enum Screen {
 /// Présentation de l'écran d'analyse : liste des problèmes ou IDE.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum WorkspaceView {
+    /// Vue générale : une boîte par catégorie.
+    General,
     /// Plan de correction.
     List,
-    /// Revue de code, problème par problème.
-    Review,
+    /// Patterns de conception : une boîte par pattern, avec des astuces.
+    Patterns,
     /// Éditeur.
     Code,
     /// Paquets du projet et leurs vulnérabilités connues.
@@ -60,16 +65,34 @@ pub struct HeraldApp {
     pub(super) selected_occurrence: usize,
     /// Hauteur de la fenêtre, pour dimensionner la liste et la fiche.
     pub(super) viewport_height: Pixels,
+    /// Largeur de la fenêtre (mise en page étroite).
+    pub(super) viewport_width: Pixels,
     /// Catégorie affichée sur l'écran d'analyse ; `None` pour toutes.
     pub(super) category_filter: Option<Category>,
     /// Vulnérabilités publiées qui touchent les dépendances des projets.
     pub(super) alerts: Vec<Advisory>,
+    /// Filtres et page de l'écran des alertes CVE.
+    pub(super) alert_filter: super::alerts::AlertFilter,
     /// Dépendances de chaque projet, relevées à la dernière analyse.
     pub(super) dependencies: HashMap<PathBuf, Vec<cve::Dependency>>,
+    /// Historique des notes de chaque projet, la plus récente d'abord
+    /// (courbe de l'onglet Général) ; mis à jour après chaque analyse.
+    pub(super) score_history: HashMap<PathBuf, Vec<store::HistoryEntry>>,
+    /// Fichiers analysés de chaque projet (carte du code de l'onglet Général),
+    /// relus du disque une fois par analyse (clé : date de l'analyse).
+    pub(super) code_maps: std::cell::RefCell<HashMap<PathBuf, (u64, Vec<String>)>>,
     /// Onglet « Dépendances ».
     pub(super) dependency_tab: super::dependencies::DependencyTab,
+    /// Modale d'un paquet de l'onglet Dépendances (problème et correction).
+    pub(super) dependency_modal: Option<super::dependency_modal::DependencyModal>,
     /// Panneau « Votre note » réduit à une bande (choix mémorisé).
     pub(super) score_panel_collapsed: bool,
+    /// Thème choisi dans les Réglages.
+    pub(super) theme_mode: ThemeMode,
+    /// Suit l'apparence de macOS (thème « Système »).
+    _appearance: Option<gpui::Subscription>,
+    /// Onglet Code : la carte du code au lieu de l'éditeur.
+    pub(super) code_map_open: bool,
     /// Note atteinte grâce aux dernières corrections, à célébrer.
     pub(super) celebration: Option<Grade>,
     /// Modale « Nouveau projet », si elle est ouverte.
@@ -78,6 +101,9 @@ pub struct HeraldApp {
     pub(super) analysis_run: Option<AnalysisRun>,
     /// Règles d'analyse, chargées à la première ouverture de l'écran « Règles ».
     pub(super) workspace_view: WorkspaceView,
+    /// Pattern dont la page est ouverte dans l'onglet Patterns (son nom) ;
+    /// `None` : la grille de tous les patterns.
+    pub(super) open_pattern: Option<&'static str>,
     /// IDE de chaque projet ouvert (onglets gardés quand on change de projet).
     pub(super) ides: HashMap<PathBuf, Ide>,
     pub(super) rules: Option<RuleCatalog>,
@@ -108,15 +134,24 @@ impl HeraldApp {
             selected_group: None,
             selected_occurrence: 0,
             viewport_height: px(860.),
+            viewport_width: px(1360.),
             category_filter: None,
             alerts: store::load_alerts(),
+            alert_filter: Default::default(),
             dependencies: store::all_dependencies(),
+            score_history: HashMap::new(),
+            code_maps: Default::default(),
             dependency_tab: Default::default(),
+            dependency_modal: None,
             score_panel_collapsed: store::setting(super::plan::SCORE_PANEL_COLLAPSED, false),
+            theme_mode: ThemeMode::from_key(&store::text_setting(THEME_MODE).unwrap_or_default()),
+            _appearance: None,
+            code_map_open: false,
             celebration: None,
             new_project: None,
             analysis_run: None,
-            workspace_view: WorkspaceView::List,
+            workspace_view: WorkspaceView::General,
+            open_pattern: None,
             ides: HashMap::new(),
             rules: None,
             rules_loading: false,
@@ -126,9 +161,21 @@ impl HeraldApp {
             window_title: String::new(),
             settings: Default::default(),
         };
+        app.score_history = app
+            .projects
+            .iter()
+            .map(|project| (project.path.clone(), store::history(&project.path)))
+            .collect();
         app.reset_selection();
         app.refresh_alerts(cx);
         app.start_service(window, cx);
+        // Développement : `HERALD_DEV_THEME=dark|light|system` (non enregistré).
+        #[cfg(debug_assertions)]
+        if let Ok(key) = std::env::var("HERALD_DEV_THEME") {
+            app.theme_mode = ThemeMode::from_key(&key);
+        }
+        // Thème « Système » : redessine quand macOS change d'apparence.
+        app._appearance = Some(cx.observe_window_appearance(window, |_, _, cx| cx.notify()));
         app
     }
 
@@ -222,6 +269,7 @@ impl HeraldApp {
         self.celebration = None;
         self.selected_group = self.visible_group_indices().first().copied();
         self.selected_occurrence = 0;
+        self.open_pattern = None;
     }
 
     pub(super) fn select_project(&mut self, ix: usize, cx: &mut Context<Self>) {
@@ -459,8 +507,19 @@ impl HeraldApp {
 
 impl Render for HeraldApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = Theme::light();
+        // Apparence : choix des Réglages, ou celle de macOS.
+        let dark = match self.theme_mode {
+            ThemeMode::Light => false,
+            ThemeMode::Dark => true,
+            ThemeMode::System => matches!(
+                window.appearance(),
+                WindowAppearance::Dark | WindowAppearance::VibrantDark
+            ),
+        };
+        crate::theme::set_dark(dark);
+        let theme = Theme::current();
         self.viewport_height = window.viewport_size().height;
+        self.viewport_width = window.viewport_size().width;
         let root = div()
             .size_full()
             .font_family(fonts::SANS)
@@ -509,6 +568,7 @@ impl Render for HeraldApp {
         let full_bleed = self.screen == Screen::Analysis;
 
         let new_project = self.render_new_project(theme, cx);
+        let dependency_modal = self.render_dependency_modal(theme, cx);
         let update_banner = self.render_update_banner(theme, cx);
         let update_required = self.render_update_required(theme, cx);
         let version = self.render_version(theme, cx);
@@ -545,6 +605,7 @@ impl Render for HeraldApp {
                     .children(self.render_resource_bar(theme)),
             )
             .children(new_project)
+            .children(dependency_modal)
             .child(version)
             .children(update_required)
     }

@@ -3,6 +3,7 @@
 mod button;
 mod code_area;
 mod herald_emblem;
+mod herald_ornaments;
 mod icon;
 mod labels;
 mod logo;
@@ -12,6 +13,7 @@ mod text_input;
 pub use button::{Button, ButtonVariant};
 pub use code_area::{CodeArea, CodeAreaEvent, Diagnostic};
 pub use herald_emblem::HeraldEmblem;
+pub use herald_ornaments::{herald_banner, herald_banner_with};
 pub use icon::{Icon, IconName};
 pub use labels::{GradeText, SeverityLabel, grade_color};
 pub use logo::Logo;

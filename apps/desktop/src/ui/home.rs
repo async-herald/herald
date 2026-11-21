@@ -119,6 +119,7 @@ impl HeraldApp {
                         .child(super::analysis::rerun_button(
                             self.usage(),
                             self.is_analyzing(&project.path),
+                            false,
                             theme,
                             cx,
                         ))
@@ -533,5 +534,22 @@ pub(super) fn surface(theme: Theme) -> Div {
 
 /// « 1 problème », « 3 problèmes » (singulier jusqu'à 1, comme en français).
 pub(super) fn count_label(count: u32, singular: &str, plural: &str) -> String {
-    format!("{count} {}", if count <= 1 { singular } else { plural })
+    format!(
+        "{} {}",
+        thousands(count),
+        if count <= 1 { singular } else { plural }
+    )
+}
+
+/// Nombre avec ses milliers séparés à la française : « 19 357 ».
+pub(super) fn thousands(n: u32) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (ix, c) in digits.chars().enumerate() {
+        if ix > 0 && (digits.len() - ix) % 3 == 0 {
+            out.push('\u{202F}');
+        }
+        out.push(c);
+    }
+    out
 }

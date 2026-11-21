@@ -1,18 +1,18 @@
-//! Écran « Problèmes » : trois vues du même rapport.
+//! Écran « Problèmes » : quatre vues du même rapport.
 //!
+//! - **Général** (`general.rs`) : les catégories, en liste, et le détail de l'une d'elles.
 //! - **Plan** (`plan.rs`) : corrections triées par points, note estimée.
-//! - **Revue** (`review.rs`) : le code, avec la fiche sous la ligne fautive.
-//! - **Code** (`ide.rs`) : l'éditeur, pour corriger.
+//! - **Patterns** (`patterns.rs`) : une boîte par pattern de conception, avec des astuces.
+//! - **Code** (`ide.rs`) : l'éditeur, pour corriger, ou la carte du code.
 
-use gpui::{AnyElement, Div, FontWeight, Hsla, div, prelude::*, px};
+use gpui::{AnyElement, FontWeight, Hsla, div, prelude::*, px};
 
 use super::app::{HeraldApp, WorkspaceView};
 use super::components::{Button, ButtonVariant, IconName, Logo};
-use super::home::{page_title, surface};
+use super::home::{count_label, surface};
 use crate::model::{Grade, Severity, Usage};
 use crate::theme::{Theme, metrics};
 
-const BADGE_H: gpui::Pixels = px(20.);
 const NOTICE_LOGO_SIZE: gpui::Pixels = px(20.);
 
 impl HeraldApp {
@@ -21,8 +21,18 @@ impl HeraldApp {
             return div().into_any_element();
         };
         let body = match self.workspace_view {
+            WorkspaceView::General => self.render_general_page(report, theme, cx),
             WorkspaceView::List => self.render_correction_plan(report, theme, cx),
-            WorkspaceView::Review => self.render_review(report, theme, cx),
+            WorkspaceView::Patterns => padded(
+                "patterns-view",
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(metrics::SPACE_5)
+                    .child(self.workspace_header(theme, cx))
+                    .children(self.render_analysis_card(theme, cx))
+                    .child(self.render_patterns(report, theme, cx)),
+            ),
             // Code et Dépendances : contenu avec ses marges, défilant.
             WorkspaceView::Code => padded(
                 "code-view",
@@ -32,7 +42,14 @@ impl HeraldApp {
                     .gap(metrics::SPACE_5)
                     .child(self.workspace_header(theme, cx))
                     .children(self.render_analysis_card(theme, cx))
-                    .child(self.render_ide(theme, cx)),
+                    .child(self.code_switch(theme, cx))
+                    .map(|this| {
+                        if self.code_map_open {
+                            this.child(self.code_map_card(report, theme, cx))
+                        } else {
+                            this.child(self.render_ide(theme, cx))
+                        }
+                    }),
             ),
             WorkspaceView::Dependencies => padded(
                 "dependencies-view",
@@ -69,24 +86,104 @@ impl HeraldApp {
             .into_any_element()
     }
 
-    /// En-tête des vues Code et Dépendances : projet et bascule des vues (la
-    /// relance est dans le panneau de la note).
-    fn workspace_header(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+    /// En-tête du projet : nom et chemin, dernière analyse, puis les onglets
+    /// soulignés (la note est dans le panneau de droite).
+    pub(super) fn workspace_header(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
         let Some(project) = self.project() else {
             return div().into_any_element();
         };
+        let report = project.report.as_ref();
+        let subline = match report {
+            Some(report) => {
+                let open = report
+                    .issues
+                    .iter()
+                    .enumerate()
+                    .filter(|(ix, issue)| !issue.review && !report.is_resolved(*ix))
+                    .count() as u32;
+                format!(
+                    "Analysé {} · {} · {}",
+                    report.summary.analyzed_at,
+                    count_label(report.summary.file_count, "fichier", "fichiers"),
+                    count_label(open, "problème ouvert", "problèmes ouverts")
+                )
+            }
+            None => "Pas encore analysé".to_owned(),
+        };
+
+        let title = div()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .gap(metrics::SPACE_1)
+            .child(
+                div()
+                    .flex()
+                    .items_baseline()
+                    .gap(metrics::SPACE_3)
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_size(metrics::TEXT_XL)
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(project.name.clone()),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(metrics::TEXT_SM)
+                            .text_color(theme.ink_muted)
+                            .child(project.display_path().to_string()),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(metrics::TEXT_SM)
+                    .text_color(theme.ink_muted)
+                    .child(subline),
+            );
+
+        let top = div()
+            .flex()
+            .items_center()
+            .gap(metrics::SPACE_4)
+            .child(title);
+
         div()
             .flex()
-            .items_end()
-            .justify_between()
+            .flex_col()
             .gap(metrics::SPACE_4)
-            .child(page_title(
-                project.name.clone(),
-                project.display_path().to_string(),
-                theme,
-            ))
-            .child(view_switch(self.workspace_view, theme, cx))
+            .child(top)
+            .child(
+                div()
+                    .border_b_1()
+                    .border_color(theme.border)
+                    .child(view_switch(self.workspace_view, theme, cx)),
+            )
             .into_any_element()
+    }
+
+    /// Bascule de l'onglet Code : l'éditeur ou la carte du code.
+    fn code_switch(&self, theme: Theme, cx: &mut Context<Self>) -> impl IntoElement {
+        let option = |id: &'static str, label: &'static str, map: bool| {
+            Button::new(id, label, theme)
+                .variant(if self.code_map_open == map {
+                    ButtonVariant::Default
+                } else {
+                    ButtonVariant::Ghost
+                })
+                .on_click(cx.listener(move |app, _, _, cx| {
+                    app.code_map_open = map;
+                    cx.notify();
+                }))
+        };
+        div()
+            .flex()
+            .gap(metrics::SPACE_2)
+            .child(option("code-editor", "Éditeur", false))
+            .child(option("code-map", "Carte du code", true))
     }
 }
 
@@ -119,33 +216,6 @@ pub(super) fn severity_color(severity: Severity, theme: &Theme) -> Hsla {
     }
 }
 
-/// Badge de gravité (« Critique ») de la fiche.
-pub(super) fn severity_badge(severity: Severity, theme: Theme) -> impl IntoElement {
-    let bg = match severity {
-        Severity::Critical => theme.code_line_critical,
-        Severity::Warning => theme.code_line_warning,
-        Severity::Info => theme.track,
-    };
-    badge(severity.label(), theme)
-        .bg(bg)
-        .border_color(bg)
-        .text_color(severity_color(severity, &theme))
-}
-
-pub(super) fn badge(label: &'static str, _theme: Theme) -> Div {
-    div()
-        .flex_none()
-        .flex()
-        .items_center()
-        .h(BADGE_H)
-        .px(metrics::SPACE_2)
-        .rounded(metrics::RADIUS)
-        .border_1()
-        .text_size(metrics::TEXT_XS)
-        .font_weight(FontWeight::MEDIUM)
-        .child(label)
-}
-
 /// Petit titre de section en capitales (« CORRECTIF PROPOSÉ »).
 pub(super) fn section_caption(text: &str, theme: Theme) -> impl IntoElement {
     div()
@@ -157,30 +227,42 @@ pub(super) fn section_caption(text: &str, theme: Theme) -> impl IntoElement {
 
 /// « Relancer l'analyse » du projet affiché. Pendant l'analyse : inactif ;
 /// quota du jour épuisé : inactif jusqu'au lendemain.
+///
+/// `prominent` : action principale du panneau « Votre note » (or plein, grande,
+/// toute la largeur) ; sinon bouton secondaire (page du projet, où « Voir les
+/// problèmes » est l'action principale).
 pub(super) fn rerun_button(
     usage: Option<Usage>,
     analyzing: bool,
+    prominent: bool,
     theme: Theme,
     cx: &mut Context<HeraldApp>,
 ) -> AnyElement {
-    if analyzing {
-        return div()
+    let style = |button: Button| {
+        if prominent {
+            button.variant(ButtonVariant::Primary).large().full_width()
+        } else {
+            button
+        }
+    };
+    let dimmed = |button: Button| {
+        div()
             .opacity(0.6)
-            .child(Button::new("rerun", "Analyse en cours…", theme).icon(IconName::Refresh))
-            .into_any_element();
+            .when(prominent, |this| this.w_full())
+            .child(style(button))
+            .into_any_element()
+    };
+    if analyzing {
+        return dimmed(Button::new("rerun", "Analyse en cours…", theme).icon(IconName::Refresh));
     }
     if usage.is_some_and(|usage| usage.is_exhausted()) {
-        return div()
-            .opacity(0.6)
-            .child(Button::new(
-                "rerun",
-                "Quota atteint · il revient demain",
-                theme,
-            ))
-            .into_any_element();
+        return dimmed(Button::new(
+            "rerun",
+            "Quota atteint · il revient demain",
+            theme,
+        ));
     }
-    Button::new("rerun", "Relancer l'analyse", theme)
-        .icon(IconName::Refresh)
+    style(Button::new("rerun", "Relancer l'analyse", theme).icon(IconName::Refresh))
         .on_click(cx.listener(|app, _, _, cx| app.start_analysis(cx)))
         .into_any_element()
 }
@@ -209,8 +291,8 @@ pub(super) fn celebration_notice(
         )
 }
 
-/// Bascule Plan / Revue / Code / Dépendances de l'écran d'analyse.
-pub(super) fn view_switch(
+/// Bascule Plan / Patterns / Code / Dépendances de l'écran d'analyse.
+fn view_switch(
     current: WorkspaceView,
     theme: Theme,
     cx: &mut Context<HeraldApp>,
@@ -219,17 +301,19 @@ pub(super) fn view_switch(
         let active = current == view;
         div()
             .id(id)
-            .flex()
-            .items_center()
-            .h_full()
-            .px(metrics::SPACE_3)
+            .py(metrics::SPACE_2)
+            .mb(px(-1.))
+            .border_b_2()
             .cursor_pointer()
-            .when(active, |this| {
-                this.bg(theme.bg_active).font_weight(FontWeight::MEDIUM)
+            .border_color(if active {
+                theme.ink
+            } else {
+                gpui::transparent_black()
             })
+            .when(active, |this| this.font_weight(FontWeight::SEMIBOLD))
             .when(!active, |this| {
                 this.text_color(theme.ink_muted)
-                    .hover(|style| style.bg(theme.bg_hover))
+                    .hover(|style| style.text_color(theme.ink))
             })
             .on_click(
                 cx.listener(move |app, _, window, cx| app.set_workspace_view(view, window, cx)),
@@ -238,18 +322,11 @@ pub(super) fn view_switch(
     };
     div()
         .flex()
-        .h(metrics::CONTROL_H)
-        .rounded(metrics::RADIUS)
-        .overflow_hidden()
-        .border_1()
-        .border_color(theme.border)
-        .bg(theme.bg_surface)
+        .gap(metrics::SPACE_6)
+        .child(item("view-general", "Général", WorkspaceView::General))
         .child(item("view-list", "Plan", WorkspaceView::List))
-        .child(div().w(px(1.)).h_full().bg(theme.border))
-        .child(item("view-review", "Revue", WorkspaceView::Review))
-        .child(div().w(px(1.)).h_full().bg(theme.border))
+        .child(item("view-patterns", "Patterns", WorkspaceView::Patterns))
         .child(item("view-code", "Code", WorkspaceView::Code))
-        .child(div().w(px(1.)).h_full().bg(theme.border))
         .child(item(
             "view-deps",
             "Dépendances",

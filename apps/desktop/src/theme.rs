@@ -3,6 +3,8 @@
 //! Les couleurs reprennent `heraldapp-rs/style/_theme.scss` (or, encre brune,
 //! fond crème).
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use gpui::{Hsla, rgb};
 
 /// Familles de polices embarquées (voir [`crate::assets`]).
@@ -45,6 +47,52 @@ pub mod metrics {
     pub const ICON_SM: Pixels = px(14.);
 }
 
+/// Apparence choisie dans les Réglages.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemeMode {
+    Light,
+    Dark,
+    /// Suit l'apparence de macOS.
+    System,
+}
+
+impl ThemeMode {
+    pub const ALL: [Self; 3] = [Self::Light, Self::Dark, Self::System];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Light => "Clair",
+            Self::Dark => "Sombre",
+            Self::System => "Système",
+        }
+    }
+
+    /// Valeur enregistrée dans les réglages.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Light => "light",
+            Self::Dark => "dark",
+            Self::System => "system",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Self {
+        match key {
+            "dark" => Self::Dark,
+            "system" => Self::System,
+            _ => Self::Light,
+        }
+    }
+}
+
+/// Thème sombre en cours (fixé par la fenêtre principale à chaque rendu).
+static DARK: AtomicBool = AtomicBool::new(false);
+
+/// Choisit le thème utilisé par [`Theme::current`].
+pub fn set_dark(dark: bool) {
+    DARK.store(dark, Ordering::Relaxed);
+}
+
 /// Jetons de couleur. `Copy` : les composants le reçoivent par valeur.
 #[derive(Clone, Copy, Debug)]
 pub struct Theme {
@@ -79,13 +127,18 @@ pub struct Theme {
     pub emblem_wing: Hsla,
     pub emblem_wing_deep: Hsla,
     pub emblem_line: Hsla,
+    /// Or du héraut : auréoles, ailes des titres, courbe de la note.
+    pub halo: Hsla,
+    /// Bandeau « Le héraut annonce » : fond et bordure.
+    pub herald_bg: Hsla,
+    pub herald_border: Hsla,
+    /// Texte des titres ornés d'ailes.
+    pub herald_text: Hsla,
 
     pub code_bg: Hsla,
     pub code_text: Hsla,
     pub code_comment: Hsla,
     pub code_line_number: Hsla,
-    pub code_highlight_bg: Hsla,
-    pub code_highlight_fg: Hsla,
     /// Éditeur de code : mots-clés, chaînes, nombres, sélection, ligne courante.
     pub code_keyword: Hsla,
     pub code_string: Hsla,
@@ -95,9 +148,6 @@ pub struct Theme {
     /// Fond des lignes qui portent un problème, selon la gravité.
     pub code_line_critical: Hsla,
     pub code_line_warning: Hsla,
-    /// Correctif proposé : fond et texte de la ligne corrigée.
-    pub code_fix_bg: Hsla,
-    pub code_fix_fg: Hsla,
 }
 
 fn hex(value: u32) -> Hsla {
@@ -105,6 +155,15 @@ fn hex(value: u32) -> Hsla {
 }
 
 impl Theme {
+    /// Thème choisi dans les Réglages (clair, sombre ou selon le système).
+    pub fn current() -> Self {
+        if DARK.load(Ordering::Relaxed) {
+            Self::dark()
+        } else {
+            Self::light()
+        }
+    }
+
     pub fn light() -> Self {
         Self {
             bg_page: hex(0xF5F0E6),
@@ -132,13 +191,15 @@ impl Theme {
             emblem_wing: hex(0xFFFDF7),
             emblem_wing_deep: hex(0xF3E6C4),
             emblem_line: hex(0xB8914A),
+            halo: hex(0xC8A96A),
+            herald_bg: hex(0xFDF7E6),
+            herald_border: hex(0xE6D6A8),
+            herald_text: hex(0x9A7A3A),
 
             code_bg: hex(0xFBF8F1),
             code_text: hex(0x2B2318),
             code_comment: hex(0x8A7D62),
             code_line_number: hex(0xB0A486),
-            code_highlight_bg: hex(0xF8E3DE),
-            code_highlight_fg: hex(0x7A1E14),
             code_keyword: hex(0x8A3FA0),
             code_string: hex(0x2F7A4A),
             code_number: hex(0x9A5B0E),
@@ -146,8 +207,66 @@ impl Theme {
             code_current_line: hex(0xF5EFE2),
             code_line_critical: hex(0xFBE9E5),
             code_line_warning: hex(0xFBF1D9),
-            code_fix_bg: hex(0xE4F1E6),
-            code_fix_fg: hex(0x1F5C34),
         }
+    }
+
+    /// Thème sombre : brun très foncé, encre crème, or conservé.
+    pub fn dark() -> Self {
+        Self {
+            bg_page: hex(0x1B1712),
+            bg_surface: hex(0x24201A),
+            bg_hover: hex(0x2C2720),
+            bg_active: hex(0x3A301F),
+            border: hex(0x3A3328),
+            border_soft: hex(0x2F2A22),
+
+            ink: hex(0xEEE7DA),
+            ink_muted: hex(0xB3A893),
+            ink_soft: hex(0x8D826D),
+
+            accent: hex(0xEAA11A),
+            on_accent: hex(0x1B1712),
+            accent_text: hex(0xE8BE68),
+
+            success: hex(0x6CC28A),
+            success_bg: hex(0x1F2D23),
+            accent_soft: hex(0x2E2617),
+            warning: hex(0xE0A63A),
+            danger: hex(0xEF7A6A),
+            track: hex(0x3A3328),
+
+            emblem_wing: hex(0x2A241C),
+            emblem_wing_deep: hex(0x3A301F),
+            emblem_line: hex(0xC8A96A),
+            halo: hex(0xC8A96A),
+            herald_bg: hex(0x2A2317),
+            herald_border: hex(0x4A3D22),
+            herald_text: hex(0xE0BE72),
+
+            code_bg: hex(0x201C16),
+            code_text: hex(0xE6DFD2),
+            code_comment: hex(0x8D826D),
+            code_line_number: hex(0x6B6253),
+            code_keyword: hex(0xC792EA),
+            code_string: hex(0x8FCB9B),
+            code_number: hex(0xE9A45B),
+            code_selection: hex(0x4A3D22),
+            code_current_line: hex(0x29241D),
+            code_line_critical: hex(0x3A2220),
+            code_line_warning: hex(0x3A3020),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ThemeMode;
+
+    #[test]
+    fn theme_modes_round_trip_through_settings() {
+        for mode in ThemeMode::ALL {
+            assert_eq!(ThemeMode::from_key(mode.key()), mode);
+        }
+        assert_eq!(ThemeMode::from_key(""), ThemeMode::Light);
     }
 }

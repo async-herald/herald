@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "async-herald-desktop"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",

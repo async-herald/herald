@@ -4,7 +4,7 @@ Chaque version a sa section « ## <version> » : elle est publiée telle quelle 
 « Mises à jour » de herald.codes (affichée par l'app) et annoncée sur Discord.
 Une version sans section ne peut pas être publiée.
 
-## 0.2.3
+## 0.2.4
 - Éditeur de règles : dans l'écran Règles, « Nouvelle règle » ouvre un éditeur de règles `.herald` avec la vérification en direct (lecture de la règle, identifiant libre, résultat de chaque test). « Mes règles » liste vos règles, gardées sur cette machine et ajoutées aux règles officielles à la prochaine analyse.
 - Chaque règle a sa page : pourquoi, comment corriger, la source et ses tests. « Modifier » permet aussi de créer votre version d'une règle officielle, qui la remplace dans vos analyses ; « Revenir à la version officielle » l'annule.
 - Monorepo : l'onglet Général donne une note par paquet (workspaces npm, yarn, pnpm, lerna, Cargo, go.work, ou dossiers apps/, packages/, services/…). « Analyser à part » ajoute un paquet comme projet.

@@ -86,7 +86,8 @@ fn main() {
         let name = repo.file_name().unwrap().to_string_lossy().into_owned();
         eprint!("{name:<24} ");
         let commit = head_commit(repo).unwrap_or_default();
-        let files: Vec<_> = collect::collect_files(repo)
+        let files: Vec<_> = collect::collect_files(repo, collect::DEFAULT_MAX_FILES, |_, _| {})
+            .files
             .into_iter()
             .filter(|file| !manifest::is_manifest(&file.path))
             .collect();

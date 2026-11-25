@@ -21,8 +21,18 @@ use herald_engine::dependencies::manifest;
 use herald_engine::language::Language;
 use herald_engine::types::FileInput;
 
-/// Nombre maximal de fichiers analysés (`MAX_FILES` du backend).
-pub const MAX_FILES: usize = 5_000;
+/// Limites proposées dans Réglages > Analyse (le backend gardait 5 000 fichiers ;
+/// l'analyse étant locale, la limite suit les gros dépôts).
+pub const FILE_LIMITS: [usize; 4] = [5_000, 20_000, 50_000, 100_000];
+/// Limite par défaut, tant que l'utilisateur n'en a pas choisi une autre.
+pub const DEFAULT_MAX_FILES: usize = 50_000;
+/// Réglage local : nombre maximal de fichiers analysés.
+pub const MAX_FILES_SETTING: &str = "max_files";
+/// Code lu au plus pour une analyse. Le moteur garde tous les fichiers en
+/// mémoire en même temps (ses règles croisent les fichiers) : ce budget borne
+/// la mémoire, quelle que soit la limite de fichiers.
+pub const MAX_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
+
 /// Taille maximale d'un fichier (`MAX_FILE_BYTES` du backend).
 pub const MAX_FILE_BYTES: u64 = 500 * 1024;
 
@@ -163,42 +173,110 @@ fn walk_project(root: &Path, mut visit: impl FnMut(String, u64) -> bool) {
     }
 }
 
-/// Fichiers retenus, chemins relatifs à `root` avec des `/`, dans un ordre stable.
-pub fn collect_files(root: &Path) -> Vec<FileInput> {
+/// Fichiers lus pour l'analyse.
+pub struct Collected {
+    pub files: Vec<FileInput>,
+    /// Fichiers qui auraient été analysés sans limite (`files.len()` au moins).
+    pub candidates: usize,
+}
+
+/// Fichiers retenus, chemins relatifs à `root` avec des `/`, dans un ordre
+/// stable. Au plus `max_files` fichiers et [`MAX_TOTAL_BYTES`] de code, pris à
+/// tour de rôle dans chaque dossier de premier niveau quand tout ne tient pas.
+/// `on_read(lus, à lire)` suit la lecture.
+pub fn collect_files(
+    root: &Path,
+    max_files: usize,
+    mut on_read: impl FnMut(usize, usize),
+) -> Collected {
     let mut candidates = Vec::new();
     walk_project(root, |relative, size| {
         if keep(&relative, size) {
-            candidates.push(relative);
+            candidates.push((relative, size));
         }
         true
     });
-    candidates.sort();
+    let total = candidates.len();
+    let chosen = select_fairly(candidates, max_files, MAX_TOTAL_BYTES);
 
-    candidates
-        .into_iter()
-        .filter_map(|relative| {
-            let code = fs::read_to_string(root.join(&relative)).ok()?;
-            Some(FileInput {
+    let to_read = chosen.len();
+    let mut files = Vec::with_capacity(to_read);
+    for (ix, relative) in chosen.into_iter().enumerate() {
+        if let Ok(code) = fs::read_to_string(root.join(&relative)) {
+            files.push(FileInput {
                 path: relative,
                 code,
-            })
-        })
-        .take(MAX_FILES)
-        .collect()
+            });
+        }
+        if ix % 250 == 0 || ix + 1 == to_read {
+            on_read(ix + 1, to_read);
+        }
+    }
+    Collected {
+        files,
+        candidates: total,
+    }
+}
+
+/// Choisit au plus `max_files` fichiers et `max_bytes` octets parmi
+/// `candidates` (chemin, taille). Tout tient : tout est gardé. Sinon les
+/// dossiers de premier niveau (les paquets d'un monorepo, `src`, `tests`…)
+/// fournissent un fichier chacun à leur tour, pour qu'aucun ne soit écarté en
+/// bloc par l'ordre alphabétique. Résultat trié.
+fn select_fairly(
+    mut candidates: Vec<(String, u64)>,
+    max_files: usize,
+    max_bytes: u64,
+) -> Vec<String> {
+    candidates.sort();
+    let bytes: u64 = candidates.iter().map(|(_, size)| *size).sum();
+    if candidates.len() <= max_files && bytes <= max_bytes {
+        return candidates.into_iter().map(|(path, _)| path).collect();
+    }
+
+    // Files par dossier de premier niveau, dans l'ordre des chemins.
+    let mut groups: Vec<(String, std::collections::VecDeque<(String, u64)>)> = Vec::new();
+    for (path, size) in candidates {
+        let top = path.split_once('/').map_or("", |(top, _)| top).to_owned();
+        match groups.last_mut() {
+            Some((name, queue)) if *name == top => queue.push_back((path, size)),
+            _ => groups.push((top, std::collections::VecDeque::from([(path, size)]))),
+        }
+    }
+
+    let mut chosen = Vec::new();
+    let mut used = 0u64;
+    while chosen.len() < max_files && groups.iter().any(|(_, queue)| !queue.is_empty()) {
+        for (_, queue) in &mut groups {
+            if chosen.len() >= max_files {
+                break;
+            }
+            // Un fichier qui dépasse le budget restant est passé ; un plus petit
+            // du même dossier peut encore tenir.
+            while let Some((path, size)) = queue.pop_front() {
+                if used + size <= max_bytes {
+                    used += size;
+                    chosen.push(path);
+                    break;
+                }
+            }
+        }
+    }
+    chosen.sort();
+    chosen
 }
 
 /// Chemins des fichiers que l'analyse retiendrait, sans les lire (carte du
 /// code de l'onglet Général), triés.
-pub fn analyzed_paths(root: &Path) -> Vec<String> {
-    let mut out = Vec::new();
+pub fn analyzed_paths(root: &Path, max_files: usize) -> Vec<String> {
+    let mut candidates = Vec::new();
     walk_project(root, |relative, size| {
         if keep(&relative, size) {
-            out.push(relative);
+            candidates.push((relative, size));
         }
-        out.len() < MAX_FILES
+        true
     });
-    out.sort();
-    out
+    select_fairly(candidates, max_files, MAX_TOTAL_BYTES)
 }
 
 /// Tous les fichiers du projet pour l'explorateur (dossiers ignorés ou générés
@@ -216,7 +294,7 @@ pub fn project_files(root: &Path) -> Vec<String> {
 }
 
 /// Limite de l'explorateur, pour garder l'arbre lisible et rapide.
-const MAX_TREE_FILES: usize = 20_000;
+const MAX_TREE_FILES: usize = 100_000;
 
 /// Copie de `filter::keep` du backend.
 fn keep(path: &str, size: u64) -> bool {
@@ -335,6 +413,52 @@ fn path_ignored(path: &str, patterns: &[String]) -> bool {
 mod tests {
     use super::*;
 
+    fn files(paths: &[&str]) -> Vec<(String, u64)> {
+        paths.iter().map(|path| (path.to_string(), 10)).collect()
+    }
+
+    #[test]
+    fn everything_is_kept_when_it_fits() {
+        let chosen = select_fairly(files(&["b.rs", "a/x.rs", "a/y.rs"]), 10, 1_000);
+        assert_eq!(chosen, vec!["a/x.rs", "a/y.rs", "b.rs"]);
+    }
+
+    #[test]
+    fn over_the_limit_every_top_folder_gets_its_turn() {
+        // Par ordre alphabétique, `apps/` aurait tout pris.
+        let candidates = files(&[
+            "apps/a1.ts",
+            "apps/a2.ts",
+            "apps/a3.ts",
+            "apps/a4.ts",
+            "packages/p1.ts",
+            "packages/p2.ts",
+            "services/s1.go",
+        ]);
+        let chosen = select_fairly(candidates, 4, u64::MAX);
+        assert_eq!(
+            chosen,
+            vec![
+                "apps/a1.ts",
+                "apps/a2.ts",
+                "packages/p1.ts",
+                "services/s1.go"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_byte_budget_bounds_memory() {
+        let candidates = vec![
+            ("a/big.ts".to_string(), 900),
+            ("a/small.ts".to_string(), 50),
+            ("b/small.ts".to_string(), 50),
+        ];
+        // 960 octets : le gros fichier et un petit tiennent, pas le troisième.
+        let chosen = select_fairly(candidates, 10, 960);
+        assert_eq!(chosen, vec!["a/big.ts", "b/small.ts"]);
+    }
+
     #[test]
     fn keeps_code_and_drops_noise_like_the_backend() {
         assert!(keep("src/main.rs", 100));
@@ -383,7 +507,11 @@ mod tests {
         fs::write(root.join("ios/.gitignore"), "DerivedData\nlogs/\n").unwrap();
 
         let listed = project_files(&root);
-        let analyzed: Vec<String> = collect_files(&root).into_iter().map(|f| f.path).collect();
+        let analyzed: Vec<String> = collect_files(&root, DEFAULT_MAX_FILES, |_, _| {})
+            .files
+            .into_iter()
+            .map(|f| f.path)
+            .collect();
         fs::remove_dir_all(&root).ok();
 
         assert_eq!(

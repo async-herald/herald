@@ -5,6 +5,7 @@ use crate::theme::metrics;
 /// Icônes embarquées dans `assets/icons`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IconName {
+    ArrowRight,
     Bell,
     Check,
     ChevronDown,
@@ -12,6 +13,7 @@ pub enum IconName {
     ChevronRight,
     Close,
     Export,
+    Flag,
     FolderUp,
     GitBranch,
     GitHub,
@@ -27,6 +29,7 @@ pub enum IconName {
 impl IconName {
     fn path(self) -> &'static str {
         match self {
+            Self::ArrowRight => "icons/arrow-right.svg",
             Self::Bell => "icons/bell.svg",
             Self::Check => "icons/check.svg",
             Self::ChevronDown => "icons/chevron-down.svg",
@@ -34,6 +37,7 @@ impl IconName {
             Self::ChevronRight => "icons/chevron-right.svg",
             Self::Close => "icons/close.svg",
             Self::Export => "icons/export.svg",
+            Self::Flag => "icons/flag.svg",
             Self::FolderUp => "icons/folder-up.svg",
             Self::GitBranch => "icons/git-branch.svg",
             Self::GitHub => "icons/github.svg",

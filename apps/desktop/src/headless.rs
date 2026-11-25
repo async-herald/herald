@@ -183,7 +183,7 @@ fn report_progress(phase: &SharedPhase, done: &AtomicBool) {
             let (percent, message) = match &progress.phase {
                 Phase::Preparing => (2, "Préparation du projet".to_owned()),
                 Phase::Rules => (8, "Chargement des règles".to_owned()),
-                Phase::Reading => (15, "Lecture des fichiers".to_owned()),
+                Phase::Reading { .. } => (15, "Lecture des fichiers".to_owned()),
                 Phase::Analyzing { files } => {
                     let total = (*files).max(1);
                     let ratio = progress.done.min(total) as f32 / total as f32;

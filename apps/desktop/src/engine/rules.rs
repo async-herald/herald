@@ -72,6 +72,18 @@ pub(super) fn sources() -> (Vec<String>, bool) {
     }
 }
 
+/// Règles personnelles activées dont la source se lit : celles que l'éditeur
+/// refuse d'enregistrer ne peuvent pas arriver ici, mais une base modifiée à
+/// la main ne doit pas faire échouer l'analyse.
+pub(super) fn custom_sources() -> Vec<String> {
+    crate::store::custom_rules()
+        .into_iter()
+        .filter(|rule| rule.enabled)
+        .filter(|rule| herald_engine::dsl::parse_meta(&rule.source).is_ok())
+        .map(|rule| rule.source)
+        .collect()
+}
+
 /// Faux pour une règle écrite en Rust dans le moteur : le catalogue n'en donne
 /// qu'un commentaire (`// Règle Rust — pas de fichier .herald …`), que le
 /// parseur DSL rejetterait à chaque analyse. Le moteur l'exécute de toute façon.

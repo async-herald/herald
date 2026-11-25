@@ -23,6 +23,7 @@ impl HeraldApp {
     /// Ouvre l'écran et charge les règles la première fois.
     pub(super) fn open_rules(&mut self, cx: &mut Context<Self>) {
         self.screen = Screen::Rules;
+        self.reload_custom_rules();
         if self.rules.is_none() {
             self.load_rules(cx);
         }
@@ -53,14 +54,13 @@ impl HeraldApp {
 
     fn set_rule_filter(&mut self, filter: Option<Category>, cx: &mut Context<Self>) {
         self.rule_filter = filter;
+        self.custom_rules_tab = false;
         self.rule_page = 0;
-        self.expanded_rule = None;
         cx.notify();
     }
 
     fn set_rule_page(&mut self, page: usize, cx: &mut Context<Self>) {
         self.rule_page = page;
-        self.expanded_rule = None;
         cx.notify();
     }
 
@@ -84,16 +84,13 @@ impl HeraldApp {
         cx.notify();
     }
 
-    fn toggle_rule(&mut self, id: SharedString, cx: &mut Context<Self>) {
-        self.expanded_rule = if self.expanded_rule.as_ref() == Some(&id) {
-            None
-        } else {
-            Some(id)
-        };
-        cx.notify();
-    }
-
     pub(super) fn render_rules(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(editor) = self.render_rule_editor(theme, cx) {
+            return div()
+                .max_w(CONTENT_MAX_WIDTH)
+                .child(editor)
+                .into_any_element();
+        }
         let meta = match &self.rules {
             Some(catalog) => {
                 let origin = match catalog.origin {
@@ -163,6 +160,14 @@ impl HeraldApp {
                                 Button::new("reload-rules", "Actualiser", theme)
                                     .icon(IconName::Refresh)
                                     .on_click(cx.listener(|app, _, _, cx| app.load_rules(cx))),
+                            )
+                            .child(
+                                Button::new("new-rule", "Nouvelle règle", theme)
+                                    .variant(ButtonVariant::Primary)
+                                    .icon(IconName::Plus)
+                                    .on_click(cx.listener(|app, _, window, cx| {
+                                        app.open_new_rule(window, cx)
+                                    })),
                             ),
                     ),
             )
@@ -195,7 +200,7 @@ impl HeraldApp {
         let tabs = std::iter::once(all)
             .chain(by_category)
             .map(|(filter, label, count)| {
-                let active = self.rule_filter == filter;
+                let active = !self.custom_rules_tab && self.rule_filter == filter;
                 div()
                     .id(SharedString::from(format!("rule-filter-{label}")))
                     .flex()
@@ -218,20 +223,49 @@ impl HeraldApp {
             })
             .collect::<Vec<_>>();
 
+        let custom_active = self.custom_rules_tab;
+        let custom_tab = div()
+            .id("rule-filter-custom")
+            .flex()
+            .gap(metrics::SPACE_1)
+            .py(metrics::SPACE_2)
+            .border_b_2()
+            .cursor_pointer()
+            .when(custom_active, |this| {
+                this.border_color(theme.accent)
+                    .font_weight(FontWeight::MEDIUM)
+            })
+            .when(!custom_active, |this| {
+                this.border_color(gpui::transparent_black())
+                    .text_color(theme.ink_muted)
+                    .hover(|style| style.text_color(theme.ink))
+            })
+            .on_click(cx.listener(|app, _, _, cx| app.show_custom_rules(cx)))
+            .child("Mes règles")
+            .child(
+                div()
+                    .text_color(theme.ink_soft)
+                    .child(self.custom_rules.len().to_string()),
+            );
+
         let total = catalog.in_category(self.rule_filter).count();
         let pages = total.div_ceil(PAGE_SIZE).max(1);
         // Le catalogue peut avoir rétréci depuis (Actualiser) : rester sur une page existante.
         let page = self.rule_page.min(pages - 1);
-        let rows = catalog
-            .in_category(self.rule_filter)
-            .skip(page * PAGE_SIZE)
-            .take(PAGE_SIZE)
-            .map(|rule| self.rule_row(rule, theme, cx))
-            .collect::<Vec<_>>();
+        let rows = if self.custom_rules_tab {
+            self.render_custom_rule_list(theme, cx)
+        } else {
+            catalog
+                .in_category(self.rule_filter)
+                .skip(page * PAGE_SIZE)
+                .take(PAGE_SIZE)
+                .map(|rule| self.rule_row(rule, theme, cx))
+                .collect::<Vec<_>>()
+        };
         let first = page * PAGE_SIZE + 1;
         let last = (first + PAGE_SIZE - 1).min(total);
 
-        let pagination = (pages > 1).then(|| {
+        let pagination = (pages > 1 && !self.custom_rules_tab).then(|| {
             div()
                 .flex()
                 .items_center()
@@ -273,20 +307,30 @@ impl HeraldApp {
                     .gap_x(metrics::SPACE_4)
                     .px(metrics::SPACE_4)
                     .pt(metrics::SPACE_1)
-                    .child(div().flex().gap(metrics::SPACE_4).children(tabs)),
+                    .child(
+                        div()
+                            .flex()
+                            .gap(metrics::SPACE_4)
+                            .children(tabs)
+                            .child(custom_tab),
+                    ),
             )
             .children(rows)
             .children(pagination)
     }
 
     fn rule_row(&self, rule: &Rule, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
-        let expanded = self.expanded_rule.as_ref() == Some(&rule.id);
         let id = rule.id.clone();
-        let state = rule.is_overridden().then_some(if rule.enabled {
-            "Activée par vous"
+        let modified = self.custom_rules.iter().any(|c| c.id == rule.id.as_ref());
+        let state = if modified {
+            Some("Version modifiée")
         } else {
-            "Désactivée par vous"
-        });
+            rule.is_overridden().then_some(if rule.enabled {
+                "Activée par vous"
+            } else {
+                "Désactivée par vous"
+            })
+        };
         let toggle_id = rule.id.clone();
         let enabled = rule.enabled;
         let element_id = SharedString::from(format!("rule-{}", rule.id));
@@ -299,11 +343,8 @@ impl HeraldApp {
             .px(metrics::SPACE_4)
             .py(metrics::SPACE_3)
             .cursor_pointer()
-            .when(expanded, |this| this.bg(theme.bg_active))
-            .when(!expanded, |this| {
-                this.hover(|style| style.bg(theme.bg_hover))
-            })
-            .on_click(cx.listener(move |app, _, _, cx| app.toggle_rule(id.clone(), cx)))
+            .hover(|style| style.bg(theme.bg_hover))
+            .on_click(cx.listener(move |app, _, window, cx| app.open_rule_page(&id, window, cx)))
             .child(
                 div()
                     .w(SEVERITY_WIDTH)
@@ -336,9 +377,13 @@ impl HeraldApp {
                                     .child(rule.id.clone()),
                             ),
                     )
+                    // Une seule ligne : un texte replié change de hauteur selon la
+                    // largeur, et gpui la calcule mal (lignes écrasées ou trop hautes).
+                    // Le texte complet est dans la règle dépliée.
                     .map(|this| match rule_text(&rule.id) {
                         Some(text) => this.child(
                             div()
+                                .truncate()
                                 .text_size(metrics::TEXT_SM)
                                 .text_color(theme.ink_muted)
                                 .child(text.why),
@@ -346,6 +391,7 @@ impl HeraldApp {
                         None => this.when(!rule.message.is_empty(), |this| {
                             this.child(
                                 div()
+                                    .truncate()
                                     .text_size(metrics::TEXT_SM)
                                     .text_color(theme.ink_muted)
                                     .child(rule.message.clone()),
@@ -378,7 +424,7 @@ impl HeraldApp {
                 enabled,
                 theme,
                 cx.listener(move |app, _, _, cx| {
-                    // Le clic ne doit pas aussi déplier la règle.
+                    // Le clic ne doit pas aussi ouvrir la page de la règle.
                     cx.stop_propagation();
                     app.set_rule_enabled(toggle_id.clone(), !enabled, cx);
                 }),
@@ -390,7 +436,6 @@ impl HeraldApp {
             .border_t_1()
             .border_color(theme.border_soft)
             .child(summary)
-            .when(expanded, |this| this.child(source_block(rule, theme)))
             .into_any_element()
     }
 }
@@ -409,55 +454,6 @@ fn page_button(
             .child(button.on_click(cx.listener(move |app, _, _, cx| app.set_rule_page(page, cx)))),
         None => div().opacity(0.4).child(button),
     }
-}
-
-/// Code `.herald` de la règle, ligne par ligne.
-fn source_block(rule: &Rule, theme: Theme) -> impl IntoElement {
-    let lines = rule
-        .source
-        .lines()
-        .map(|line| {
-            div()
-                .whitespace_nowrap()
-                .child(SharedString::from(line.replace('\t', "    ")))
-        })
-        .collect::<Vec<_>>();
-    let fix = rule_text(&rule.id).map(|text| {
-        div()
-            .pb(metrics::SPACE_2)
-            .flex()
-            .flex_col()
-            .gap(px(2.))
-            .child(
-                div()
-                    .text_size(metrics::TEXT_XS)
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.ink_soft)
-                    .child("COMMENT CORRIGER"),
-            )
-            .child(div().child(text.fix))
-    });
-    div()
-        .px(metrics::SPACE_4)
-        .pb(metrics::SPACE_3)
-        .bg(theme.bg_active)
-        .children(fix)
-        .child(
-            div()
-                .id(SharedString::from(format!("rule-source-{}", rule.id)))
-                .overflow_x_scroll()
-                .rounded(metrics::RADIUS)
-                .bg(theme.code_bg)
-                .border_1()
-                .border_color(theme.border_soft)
-                .px(metrics::SPACE_3)
-                .py(metrics::SPACE_2)
-                .font_family(fonts::MONO)
-                .text_size(metrics::TEXT_SM)
-                .line_height(metrics::SPACE_5)
-                .text_color(theme.code_text)
-                .children(lines),
-        )
 }
 
 /// Interrupteur activée / désactivée d'une règle.

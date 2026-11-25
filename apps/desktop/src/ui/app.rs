@@ -85,6 +85,7 @@ pub struct HeraldApp {
     pub(super) dependency_tab: super::dependencies::DependencyTab,
     /// Modale d'un paquet de l'onglet Dépendances (problème et correction).
     pub(super) dependency_modal: Option<super::dependency_modal::DependencyModal>,
+    pub(super) false_positive: Option<super::false_positive_modal::FalsePositiveModal>,
     /// Panneau « Votre note » réduit à une bande (choix mémorisé).
     pub(super) score_panel_collapsed: bool,
     /// Thème choisi dans les Réglages.
@@ -113,7 +114,11 @@ pub struct HeraldApp {
     /// Page affichée de la liste des règles officielles (à partir de 0).
     pub(super) rule_page: usize,
     /// Règle dont la source est dépliée.
-    pub(super) expanded_rule: Option<SharedString>,
+    /// Règles écrites dans l'éditeur, gardées sur cette machine.
+    pub(super) custom_rules: Vec<crate::store::CustomRule>,
+    /// Onglet « Mes règles » affiché à la place du catalogue.
+    pub(super) custom_rules_tab: bool,
+    pub(super) rule_editor: Option<super::rule_editor::RuleEditor>,
     /// Titre courant de la fenêtre (« Async Herald — Problèmes »).
     window_title: String,
     /// Écran « Réglages ».
@@ -143,6 +148,7 @@ impl HeraldApp {
             code_maps: Default::default(),
             dependency_tab: Default::default(),
             dependency_modal: None,
+            false_positive: None,
             score_panel_collapsed: store::setting(super::plan::SCORE_PANEL_COLLAPSED, false),
             theme_mode: ThemeMode::from_key(&store::text_setting(THEME_MODE).unwrap_or_default()),
             _appearance: None,
@@ -157,7 +163,9 @@ impl HeraldApp {
             rules_loading: false,
             rule_filter: None,
             rule_page: 0,
-            expanded_rule: None,
+            custom_rules: Vec::new(),
+            custom_rules_tab: false,
+            rule_editor: None,
             window_title: String::new(),
             settings: Default::default(),
         };
@@ -573,6 +581,8 @@ impl Render for HeraldApp {
 
         let new_project = self.render_new_project(theme, cx);
         let dependency_modal = self.render_dependency_modal(theme, cx);
+        let public_feed_prompt = self.render_public_feed_prompt(theme, window, cx);
+        let false_positive = self.render_false_positive(theme, cx);
         let update_banner = self.render_update_banner(theme, cx);
         let update_required = self.render_update_required(theme, cx);
         let version = self.render_version(theme, cx);
@@ -610,6 +620,8 @@ impl Render for HeraldApp {
             )
             .children(new_project)
             .children(dependency_modal)
+            .children(false_positive)
+            .children(public_feed_prompt)
             .child(version)
             .children(update_required)
     }

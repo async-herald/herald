@@ -15,7 +15,9 @@ use gpui::{
 };
 
 use super::app::{HeraldApp, WorkspaceView};
-use super::components::{Button, ProgressBar, grade_color, herald_banner, herald_banner_with};
+use super::components::{
+    Button, ButtonVariant, ProgressBar, grade_color, herald_banner, herald_banner_with,
+};
 use super::home::{count_label, surface, thousands};
 use crate::model::code_map::{self, Folder, Rect};
 use crate::model::{AnalysisReport, Category, CategoryScore, Grade, Severity};
@@ -172,7 +174,165 @@ impl HeraldApp {
 
         page.child(div().flex_none().child(banner))
             .children(rows)
+            .children(self.monorepo_section(report, theme, cx))
             .into_any_element()
+    }
+
+    /// Monorepo : une ligne par paquet avec sa note, et « Analyser à part »
+    /// qui ajoute le paquet comme projet. Rien pour un dépôt d'un seul tenant.
+    fn monorepo_section(
+        &self,
+        report: &AnalysisReport,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let root = self.project()?.path.clone();
+        let named = report
+            .packages
+            .iter()
+            .filter(|p| !p.path.is_empty())
+            .count();
+        if named < 2 {
+            return None;
+        }
+        let rows = report.packages.iter().enumerate().map(|(ix, package)| {
+            let grade = Grade::from_score(package.score);
+            let issues = if package.critical_count > 0 {
+                format!(
+                    "{} · {}",
+                    count_label(package.issue_count, "problème", "problèmes"),
+                    count_label(package.critical_count, "critique", "critiques")
+                )
+            } else {
+                count_label(package.issue_count, "problème", "problèmes")
+            };
+            let target = (!package.path.is_empty()).then(|| root.join(package.path.as_ref()));
+            div()
+                .flex()
+                .items_center()
+                .gap(metrics::SPACE_4)
+                .px(metrics::SPACE_4)
+                .py(metrics::SPACE_3)
+                .border_t_1()
+                .border_color(theme.border_soft)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .child(
+                            div()
+                                .truncate()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(package.name.clone()),
+                        )
+                        .child(
+                            div()
+                                .truncate()
+                                .font_family(fonts::MONO)
+                                .text_size(metrics::TEXT_XS)
+                                .text_color(theme.ink_soft)
+                                .child(if package.path.is_empty() {
+                                    "racine et dossiers communs".into()
+                                } else {
+                                    package.path.clone()
+                                }),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(96.))
+                        .text_size(metrics::TEXT_SM)
+                        .text_color(theme.ink_muted)
+                        .child(count_label(package.file_count, "fichier", "fichiers")),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(180.))
+                        .text_size(metrics::TEXT_SM)
+                        .text_color(if package.critical_count > 0 {
+                            theme.danger
+                        } else {
+                            theme.ink_muted
+                        })
+                        .child(issues),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(72.))
+                        .flex()
+                        .items_baseline()
+                        .justify_end()
+                        .gap(metrics::SPACE_1)
+                        .child(
+                            div()
+                                .font_family(fonts::DISPLAY)
+                                .font_weight(FontWeight::BOLD)
+                                .text_size(metrics::TEXT_LG)
+                                .text_color(grade_color(grade, &theme))
+                                .child(grade.label()),
+                        )
+                        .child(
+                            div()
+                                .text_size(metrics::TEXT_XS)
+                                .text_color(theme.ink_soft)
+                                .child(package.score.to_string()),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(132.))
+                        .flex()
+                        .justify_end()
+                        .children(target.map(|target| {
+                            Button::new(("package-analyze", ix), "Analyser à part", theme)
+                                .variant(ButtonVariant::Ghost)
+                                .on_click(cx.listener(move |app, _, _, cx| {
+                                    app.add_project(target.clone(), cx);
+                                    app.start_analysis(cx);
+                                }))
+                        })),
+                )
+        });
+        Some(
+            surface(theme)
+                .flex_none()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .px(metrics::SPACE_4)
+                        .pt(metrics::SPACE_4)
+                        .pb(metrics::SPACE_2)
+                        .flex()
+                        .items_baseline()
+                        .gap(metrics::SPACE_2)
+                        .child(
+                            div()
+                                .text_size(metrics::TEXT_XS)
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme.ink_soft)
+                                .child("MONOREPO"),
+                        )
+                        .child(
+                            div()
+                                .text_size(metrics::TEXT_SM)
+                                .text_color(theme.ink_muted)
+                                .child(format!(
+                                    "{}, notés chacun sur leurs fichiers",
+                                    count_label(named as u32, "paquet", "paquets")
+                                )),
+                        ),
+                )
+                .children(rows)
+                .into_any_element(),
+        )
     }
 
     /// Carte d'un axe : icône, nom, note ; ce qui s'y passe ; courbe des
@@ -326,7 +486,7 @@ impl HeraldApp {
         {
             return paths.clone();
         }
-        let paths = crate::engine::collect::analyzed_paths(root);
+        let paths = crate::engine::collect::analyzed_paths(root, crate::engine::max_files());
         cache.insert(root.to_path_buf(), (analyzed_at, paths.clone()));
         paths
     }

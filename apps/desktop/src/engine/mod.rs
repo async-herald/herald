@@ -17,6 +17,8 @@ pub mod cve;
 pub mod fix_command;
 pub mod local_rules;
 pub mod lockfile;
+pub mod monorepo;
+pub mod rule_check;
 pub mod rules;
 pub mod run_command;
 pub mod workspace;
@@ -35,7 +37,8 @@ use herald_engine::score::overall_score;
 use herald_engine::types::{AnalyzeRequest, AnalyzeResponse, FileInput, Issue as EngineIssue};
 
 use crate::model::{
-    AnalysisReport, Category, CategoryScore, Issue, Severity, SourceFile, Summary, rule_title,
+    AnalysisReport, Category, CategoryScore, Issue, PackageScore, Severity, SourceFile, Summary,
+    rule_title,
 };
 
 /// Fichier où le moteur range les relevés sur l'historique Git.
@@ -48,7 +51,11 @@ pub enum Phase {
     Preparing,
     /// Chargement des règles de herald.codes.
     Rules,
-    Reading,
+    /// Lecture des fichiers retenus : `read` sur `total`.
+    Reading {
+        read: usize,
+        total: usize,
+    },
     Analyzing {
         files: usize,
     },
@@ -63,7 +70,8 @@ impl Phase {
         match self {
             Self::Preparing => "Préparation du projet…".to_owned(),
             Self::Rules => "Chargement des règles…".to_owned(),
-            Self::Reading => "Lecture des fichiers…".to_owned(),
+            Self::Reading { total: 0, .. } => "Lecture des fichiers…".to_owned(),
+            Self::Reading { read, total } => format!("Lecture des fichiers… {read} sur {total}"),
             Self::Analyzing { files } => format!("Analyse de {files} fichiers…"),
             Self::Dependencies => "Relevé des dépendances…".to_owned(),
             Self::Scoring => "Calcul de la note…".to_owned(),
@@ -172,21 +180,30 @@ pub fn analyze_project(request: Request<'_>, phase: &SharedPhase) -> Result<Anal
     set_phase(phase, Phase::Preparing);
     workspace::prepare(request.path, request.remote)?;
     set_phase(phase, Phase::Rules);
-    let (rule_sources, online) = if request.fetch_rules {
+    let (mut rule_sources, online) = if request.fetch_rules {
         rules::sources()
     } else {
         (local_rules::builtin_sources(), false)
     };
+    // Règles écrites dans l'éditeur de l'app.
+    merge_custom(&mut rule_sources, rules::custom_sources());
     if let Ok(mut progress) = phase.lock() {
         // `Some(0)` : catalogue intégré au moteur (hors ligne).
         progress.rules = Some(if online { rule_sources.len() } else { 0 });
     }
 
-    set_phase(phase, Phase::Reading);
+    set_phase(phase, Phase::Reading { read: 0, total: 0 });
     let started = Instant::now();
-    let mut files = collect::collect_files(request.path);
+    let collected = collect::collect_files(request.path, max_files(), |read, total| {
+        set_phase(phase, Phase::Reading { read, total });
+    });
+    let candidate_count = collected.candidates;
+    let mut files = collected.files;
+    let packages = detect_packages(request.path, &files);
     let mut config = Config {
         rule_sources,
+        // En local, tout le projet est analysé, même au-delà du budget de temps du serveur.
+        no_time_budget: true,
         ..Config::default()
     };
     collect::apply_repo_config(request.path, &mut config, &mut files);
@@ -200,7 +217,7 @@ pub fn analyze_project(request: Request<'_>, phase: &SharedPhase) -> Result<Anal
         progress.files = files.iter().map(|file| file.path.clone()).collect();
         progress.phase = Phase::Analyzing { files: files.len() };
     }
-    let engine_request = AnalyzeRequest {
+    let mut engine_request = AnalyzeRequest {
         files,
         git: workspace::git_context(request.path),
     };
@@ -217,6 +234,7 @@ pub fn analyze_project(request: Request<'_>, phase: &SharedPhase) -> Result<Anal
         &on_file,
     ));
     let duration = started.elapsed();
+    release_unneeded_code(&mut engine_request.files, &response);
 
     set_phase(phase, Phase::Dependencies);
     let dependencies = cve::dependencies(request.path, &engine_request.files);
@@ -226,11 +244,54 @@ pub fn analyze_project(request: Request<'_>, phase: &SharedPhase) -> Result<Anal
         &response,
         request.previous_score,
         duration,
+        candidate_count,
+        &packages,
     );
     Ok(Analysis {
         report,
         dependencies,
     })
+}
+
+/// Analyse terminée : le code n'est plus utile que pour les fichiers avec des
+/// relevés (extraits) et les manifestes (dépendances). Le reste est libéré
+/// avant le calcul du rapport, pour garder l'analyse légère en mémoire.
+fn release_unneeded_code(files: &mut [FileInput], response: &AnalyzeResponse) {
+    let concerned: HashSet<&str> = response
+        .files
+        .iter()
+        .filter(|file| !file.issues.is_empty())
+        .map(|file| file.path.as_str())
+        .collect();
+    for file in files.iter_mut() {
+        if !concerned.contains(file.path.as_str())
+            && !herald_engine::dependencies::manifest::is_manifest(&file.path)
+        {
+            file.code = String::new();
+        }
+    }
+}
+
+/// Limite de fichiers choisie dans Réglages > Analyse (une valeur inconnue
+/// revient à la limite par défaut).
+pub fn max_files() -> usize {
+    crate::store::text_setting(collect::MAX_FILES_SETTING)
+        .and_then(|value| value.parse().ok())
+        .filter(|limit| collect::FILE_LIMITS.contains(limit))
+        .unwrap_or(collect::DEFAULT_MAX_FILES)
+}
+
+/// Ajoute les règles personnelles ; votre version d'une règle officielle la
+/// remplace (même identifiant) au lieu de s'y ajouter.
+fn merge_custom(sources: &mut Vec<String>, custom: Vec<String>) {
+    let custom_ids: HashSet<String> = custom
+        .iter()
+        .filter_map(|source| herald_engine::dsl::parse_meta(source).ok().map(|m| m.id))
+        .collect();
+    sources.retain(|source| {
+        herald_engine::dsl::parse_meta(source).map_or(true, |m| !custom_ids.contains(&m.id))
+    });
+    sources.extend(custom);
 }
 
 fn set_phase(phase: &SharedPhase, value: Phase) {
@@ -292,6 +353,8 @@ fn build_report(
     response: &AnalyzeResponse,
     previous_score: Option<u8>,
     duration: Duration,
+    candidate_count: usize,
+    packages: &[monorepo::Package],
 ) -> AnalysisReport {
     let total_files = files.len();
     let code: HashMap<&str, &str> = files
@@ -390,11 +453,14 @@ fn build_report(
         .collect::<HashSet<_>>()
         .len();
 
-    AnalysisReport::new(
+    let package_scores = package_scores(packages, files, &flat, &is_applicable);
+
+    let mut report = AnalysisReport::new(
         Summary {
             score,
             previous_score,
             file_count: total_files as u32,
+            candidate_count: candidate_count.max(total_files) as u32,
             language_count: language_count as u32,
             duration_ms: duration.as_millis().min(u128::from(u32::MAX)) as u32,
             issue_count: response.total_issues as u32,
@@ -404,7 +470,75 @@ fn build_report(
         categories,
         issues,
         sources,
-    )
+    );
+    report.packages = package_scores;
+    report
+}
+
+/// Paquets du monorepo (vide sinon), avant que le code ne soit libéré : les
+/// noms viennent des manifestes, les déclarations de workspace de la racine.
+fn detect_packages(root: &Path, files: &[FileInput]) -> Vec<monorepo::Package> {
+    let extra: Vec<FileInput> = monorepo::WORKSPACE_FILES
+        .iter()
+        .filter(|name| !files.iter().any(|f| f.path == **name))
+        .filter_map(|name| {
+            let code = std::fs::read_to_string(root.join(name)).ok()?;
+            Some(FileInput {
+                path: (*name).to_owned(),
+                code,
+            })
+        })
+        .collect();
+    monorepo::detect(files, &extra)
+}
+
+/// Note de chaque paquet (et des fichiers hors paquets), au même barème que la
+/// note globale : catégories applicables, relevés « À revoir » exclus.
+fn package_scores(
+    packages: &[monorepo::Package],
+    files: &[FileInput],
+    flat: &[(&str, &EngineIssue)],
+    is_applicable: &impl Fn(Category) -> bool,
+) -> Vec<PackageScore> {
+    if packages.is_empty() {
+        return Vec::new();
+    }
+    let key = |path: &str| monorepo::package_of(packages, path).map(|p| p.path.as_str());
+    let mut rows: Vec<(Option<&str>, String)> = packages
+        .iter()
+        .map(|p| (Some(p.path.as_str()), p.name.clone()))
+        .collect();
+    rows.push((None, "Hors paquets".to_owned()));
+    rows.into_iter()
+        .filter_map(|(path, name)| {
+            let file_count = files.iter().filter(|f| key(&f.path) == path).count();
+            if file_count == 0 {
+                return None;
+            }
+            let issues: Vec<&EngineIssue> = flat
+                .iter()
+                .filter(|(file, _)| *file != GIT_PSEUDO_FILE && key(file) == path)
+                .map(|(_, issue)| *issue)
+                .collect();
+            let critical_count = issues
+                .iter()
+                .filter(|i| matches!(i.severity, herald_engine::types::Severity::Error))
+                .count();
+            let scored = issues
+                .iter()
+                .copied()
+                .filter(|i| is_applicable(category_of(&i.category)))
+                .filter(|i| !local_rules::needs_review(&i.rule));
+            Some(PackageScore {
+                name: name.into(),
+                path: path.unwrap_or_default().to_owned().into(),
+                file_count: file_count as u32,
+                score: overall_score(breakdown(scored), file_count) as u8,
+                issue_count: issues.len() as u32,
+                critical_count: critical_count as u32,
+            })
+        })
+        .collect()
 }
 
 /// Extrait affichable d'un fichier.
@@ -440,6 +574,32 @@ pub fn read_sources(root: &Path, issues: &[Issue]) -> Vec<SourceFile> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rule(id: &str, message: &str) -> String {
+        format!(
+            "rule {id} {{\n  meta {{\n    type: security\n    severity: warning\n    message: \"{message}\"\n  }}\n  match js: eval($X)\n}}\n"
+        )
+    }
+
+    #[test]
+    fn your_version_of_an_official_rule_replaces_it() {
+        let mut sources = vec![rule("no-eval", "officielle"), rule("other", "officielle")];
+        merge_custom(
+            &mut sources,
+            vec![rule("no-eval", "la mienne"), rule("mine", "la mienne")],
+        );
+        let ids: Vec<String> = sources
+            .iter()
+            .map(|s| herald_engine::dsl::parse_meta(s).unwrap().id)
+            .collect();
+        assert_eq!(
+            ids,
+            vec!["other", "no-eval", "mine"],
+            "une seule no-eval, la vôtre"
+        );
+        let no_eval = sources.iter().find(|s| s.contains("no-eval")).unwrap();
+        assert!(no_eval.contains("la mienne"));
+    }
 
     #[test]
     fn analyzes_a_small_project_end_to_end() {

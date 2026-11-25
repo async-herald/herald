@@ -18,8 +18,23 @@ pub(super) const CVE_ON_START: &str = "cve_on_start";
 const CONTENT_MAX_WIDTH: gpui::Pixels = px(760.);
 const TEXT_MAX_WIDTH: gpui::Pixels = px(380.);
 
+/// Onglets de l'écran Réglages.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum SettingsTab {
+    /// Compte herald.codes (version officielle seulement).
+    #[default]
+    Account,
+    Appearance,
+    Analysis,
+    /// Faux positifs signalés depuis ce compte (version officielle seulement).
+    Reports,
+    Data,
+    About,
+}
+
 #[derive(Default)]
 pub(super) struct SettingsState {
+    pub(super) tab: SettingsTab,
     pub(super) busy: bool,
     /// Dernier message : texte et `true` pour une erreur.
     pub(super) message: Option<(SharedString, bool)>,
@@ -88,6 +103,12 @@ impl HeraldApp {
         let size = store::database_size();
 
         let account_section = self.render_account_section(theme, cx);
+        let has_account = account_section.is_some();
+        // Version locale : ni Compte ni Signalements, on ouvre Apparence.
+        let tab = match self.settings.tab {
+            SettingsTab::Account | SettingsTab::Reports if !has_account => SettingsTab::Appearance,
+            tab => tab,
+        };
 
         let mode = self.theme_mode;
         let appearance_section = section("Apparence", theme).child(row(
@@ -145,6 +166,13 @@ impl HeraldApp {
                         cx.notify();
                     }),
                 ),
+            ))
+            .child(row(
+                "Fichiers analysés au maximum",
+                "Au-delà, les fichiers sont pris à tour de rôle dans chaque dossier du projet. \
+                 Une limite haute demande plus de mémoire.",
+                theme,
+                file_limit_switch(crate::engine::max_files(), theme, cx),
             ))
             .child(row(
                 "Règles appliquées",
@@ -214,6 +242,8 @@ impl HeraldApp {
                 "Réglages",
                 if busy {
                     "Enregistrement…"
+                } else if has_account {
+                    "Compte, apparence, analyse et données locales"
                 } else {
                     "Apparence, analyse et données locales"
                 },
@@ -227,13 +257,117 @@ impl HeraldApp {
                     .text_color(if error { theme.danger } else { theme.success })
                     .child(text)
             }))
-            .children(account_section)
-            .child(appearance_section)
-            .child(analysis_section)
-            .child(data_section)
-            .child(about_section)
+            .child(
+                div()
+                    .flex_none()
+                    .border_b_1()
+                    .border_color(theme.border)
+                    .child(settings_tabs(tab, has_account, theme, cx)),
+            )
+            .child(match tab {
+                SettingsTab::Account => account_section.unwrap_or_else(|| div().into_any_element()),
+                SettingsTab::Appearance => appearance_section.into_any_element(),
+                SettingsTab::Analysis => analysis_section.into_any_element(),
+                SettingsTab::Reports => self
+                    .render_reports_section(theme, cx)
+                    .unwrap_or_else(|| div().into_any_element()),
+                SettingsTab::Data => data_section.into_any_element(),
+                SettingsTab::About => about_section.into_any_element(),
+            })
             .into_any_element()
     }
+}
+
+/// Choix de la limite de fichiers, au style du choix du thème.
+fn file_limit_switch(
+    current: usize,
+    theme: Theme,
+    cx: &mut Context<HeraldApp>,
+) -> impl IntoElement {
+    use crate::engine::collect::{FILE_LIMITS, MAX_FILES_SETTING};
+    div()
+        .flex()
+        .p(px(2.))
+        .gap(px(2.))
+        .rounded(metrics::RADIUS)
+        .bg(theme.bg_hover)
+        .border_1()
+        .border_color(theme.border)
+        .children(FILE_LIMITS.into_iter().map(|limit| {
+            let on = limit == current;
+            div()
+                .id(("file-limit", limit))
+                .px(metrics::SPACE_3)
+                .py(px(4.))
+                .rounded(metrics::RADIUS)
+                .text_size(metrics::TEXT_SM)
+                .cursor_pointer()
+                .when(on, |this| {
+                    this.bg(theme.bg_surface)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .border_1()
+                        .border_color(theme.border)
+                })
+                .when(!on, |this| {
+                    this.text_color(theme.ink_muted)
+                        .hover(|style| style.text_color(theme.ink))
+                })
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    store::set_text_setting(MAX_FILES_SETTING, &limit.to_string());
+                    cx.notify();
+                }))
+                .child(super::home::thousands(limit as u32))
+        }))
+}
+
+/// Barre d'onglets des réglages, au style de celle de l'écran Problèmes.
+fn settings_tabs(
+    current: SettingsTab,
+    has_account: bool,
+    theme: Theme,
+    cx: &mut Context<HeraldApp>,
+) -> impl IntoElement {
+    let tab = |id: &'static str, label: &'static str, value: SettingsTab| {
+        super::analysis::underline_tab(
+            id,
+            label,
+            current == value,
+            theme,
+            cx.listener(move |app, _, window, cx| {
+                app.settings.tab = value;
+                // Liste relue à chaque ouverture de l'onglet : un statut a pu changer.
+                if value == SettingsTab::Reports {
+                    app.load_own_reports(window, cx);
+                }
+                cx.notify();
+            }),
+        )
+    };
+    div()
+        .flex()
+        .gap(metrics::SPACE_6)
+        .when(has_account, |this| {
+            this.child(tab("settings-tab-account", "Compte", SettingsTab::Account))
+        })
+        .child(tab(
+            "settings-tab-appearance",
+            "Apparence",
+            SettingsTab::Appearance,
+        ))
+        .child(tab(
+            "settings-tab-analysis",
+            "Analyse",
+            SettingsTab::Analysis,
+        ))
+        .when(has_account, |this| {
+            this.child(tab(
+                "settings-tab-reports",
+                "Signalements",
+                SettingsTab::Reports,
+            ))
+        })
+        .child(tab("settings-tab-data", "Données", SettingsTab::Data))
+        .child(tab("settings-tab-about", "À propos", SettingsTab::About))
 }
 
 /// Bloc de réglages avec son titre.

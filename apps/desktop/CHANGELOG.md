@@ -4,6 +4,15 @@ Chaque version a sa section « ## <version> » : elle est publiée telle quelle 
 « Mises à jour » de herald.codes (affichée par l'app) et annoncée sur Discord.
 Une version sans section ne peut pas être publiée.
 
+## 0.2.3
+- Éditeur de règles : dans l'écran Règles, « Nouvelle règle » ouvre un éditeur de règles `.herald` avec la vérification en direct (lecture de la règle, identifiant libre, résultat de chaque test). « Mes règles » liste vos règles, gardées sur cette machine et ajoutées aux règles officielles à la prochaine analyse.
+- Chaque règle a sa page : pourquoi, comment corriger, la source et ses tests. « Modifier » permet aussi de créer votre version d'une règle officielle, qui la remplace dans vos analyses ; « Revenir à la version officielle » l'annule.
+- Monorepo : l'onglet Général donne une note par paquet (workspaces npm, yarn, pnpm, lerna, Cargo, go.work, ou dossiers apps/, packages/, services/…). « Analyser à part » ajoute un paquet comme projet.
+- Gros projets : jusqu'à 50 000 fichiers analysés par défaut (5 000 avant), réglable dans Réglages > Analyse jusqu'à 100 000. La mémoire utilisée est bornée et nettement réduite, l'analyse locale n'est plus coupée au bout de 50 secondes, et l'en-tête du projet signale quand la limite est atteinte.
+- Faux positif : sur chaque erreur du plan, un bouton ouvre une fenêtre pour signaler un faux positif à l'équipe Herald, avec un commentaire et, seulement si vous l'acceptez, l'extrait de code. Vos signalements et leur statut sont dans Réglages > Signalements.
+- Réglages réorganisés en onglets (Compte, Apparence, Analyse, Données, Signalements, À propos), ouverts depuis le bas de la barre latérale, à côté du compte.
+- Avant la toute première analyse, l'app demande si vos analyses doivent apparaître dans le fil public.
+
 ## 0.2.2
 - Mac Intel : l'app fonctionne maintenant sur tous les Mac, Apple Silicon et Intel (app universelle), avec le .dmg comme avec `brew install herald`. Sur un Mac Intel, macOS refusait de l'ouvrir (« n'est pas prise en charge par ce Mac »).
 

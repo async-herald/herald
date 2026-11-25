@@ -14,6 +14,11 @@ pub struct Config {
     /// compilé dans le binaire. Non sérialisé (injecté côté serveur).
     #[serde(skip)]
     pub rule_sources: Vec<String>,
+    /// Pas de budget de temps : tous les fichiers sont analysés, quel que soit
+    /// le temps (analyse locale de l'app bureau). Faux par défaut : le serveur
+    /// garde son budget et rend un rapport partiel au-delà. Non sérialisé.
+    #[serde(skip)]
+    pub no_time_budget: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

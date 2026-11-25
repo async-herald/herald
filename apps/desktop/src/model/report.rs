@@ -12,6 +12,11 @@ pub struct Summary {
     pub score: u8,
     pub previous_score: Option<u8>,
     pub file_count: u32,
+    /// Fichiers qui auraient été analysés sans limite ; au-dessus de
+    /// `file_count`, la limite de Réglages > Analyse a été atteinte. 0 : rapport
+    /// antérieur à ce champ.
+    #[serde(default)]
+    pub candidate_count: u32,
     pub language_count: u32,
     pub duration_ms: u32,
     pub issue_count: u32,
@@ -32,6 +37,18 @@ impl Summary {
         self.previous_score
             .map(|previous| i16::from(self.score) - i16::from(previous))
     }
+}
+
+/// Note d'un paquet de monorepo, calculée comme la note globale sur ses seuls fichiers.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PackageScore {
+    pub name: SharedString,
+    /// Dossier relatif à la racine ; vide pour les fichiers hors paquets.
+    pub path: SharedString,
+    pub file_count: u32,
+    pub score: u8,
+    pub issue_count: u32,
+    pub critical_count: u32,
 }
 
 /// Score d'une catégorie de règles.
@@ -65,6 +82,8 @@ pub struct AnalysisReport {
     /// Tous les problèmes, y compris ceux des catégories verrouillées (comptés dans la note).
     pub issues: Vec<Issue>,
     pub sources: Vec<SourceFile>,
+    /// Monorepo : une note par paquet (vide pour un dépôt d'un seul tenant).
+    pub packages: Vec<PackageScore>,
     /// Problèmes marqués comme corrigés par l'utilisateur, en attente de la
     /// prochaine analyse pour confirmation.
     resolved: BTreeSet<usize>,
@@ -120,6 +139,7 @@ impl AnalysisReport {
             categories,
             issues,
             sources,
+            packages: Vec::new(),
             resolved: BTreeSet::new(),
             groups,
             base_gains: Vec::new(),
@@ -430,6 +450,7 @@ mod tests {
             score: 88,
             previous_score: Some(84),
             file_count: 10,
+            candidate_count: 10,
             language_count: 1,
             duration_ms,
             issue_count: 0,

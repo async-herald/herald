@@ -260,30 +260,44 @@ impl ExampleOutcome {
 /// Run every rule's `examples`/`tests` block and check that `flag`/`fail` cases
 /// are detected and `ok`/`pass` cases are not. Powers `herald test`.
 pub fn run_examples() -> Vec<ExampleOutcome> {
-    let mut out = Vec::new();
-    for loaded in RULES.iter() {
-        let rule = &loaded.rule;
-        for ex in &rule.examples {
-            let got_flag = match ex.target {
-                model::Target::Code(lang) => {
-                    let tree = crate::parser::parse(&ex.value, lang);
-                    let issues = eval::run(rule, &ex.value, tree.as_ref(), Some(lang));
-                    issues.iter().any(|i| i.rule == rule.id)
-                }
-                model::Target::Path | model::Target::Branch | model::Target::Commit => {
-                    !eval::run_context(rule, &ex.value).is_empty()
-                }
-            };
-            out.push(ExampleOutcome {
-                rule: rule.id.clone(),
-                target: ex.target.label(),
-                value: ex.value.clone(),
-                expected_flag: ex.should_flag,
-                got_flag,
-            });
+    RULES
+        .iter()
+        .flat_map(|loaded| {
+            let rule = &loaded.rule;
+            rule.examples.iter().map(move |ex| example_outcome(rule, ex))
+        })
+        .collect()
+}
+
+/// Run the `tests`/`examples` block of one rule given its `.herald` source —
+/// the "check" of the desktop rule editor. `Err` is the parser message.
+pub fn run_source_examples(source: &str) -> Result<Vec<ExampleOutcome>, String> {
+    let rule = parser::parse_rule(source)?;
+    Ok(rule
+        .examples
+        .iter()
+        .map(|ex| example_outcome(&rule, ex))
+        .collect())
+}
+
+fn example_outcome(rule: &model::RuleDef, ex: &model::Example) -> ExampleOutcome {
+    let got_flag = match ex.target {
+        model::Target::Code(lang) => {
+            let tree = crate::parser::parse(&ex.value, lang);
+            let issues = eval::run(rule, &ex.value, tree.as_ref(), Some(lang));
+            issues.iter().any(|i| i.rule == rule.id)
         }
+        model::Target::Path | model::Target::Branch | model::Target::Commit => {
+            !eval::run_context(rule, &ex.value).is_empty()
+        }
+    };
+    ExampleOutcome {
+        rule: rule.id.clone(),
+        target: ex.target.label(),
+        value: ex.value.clone(),
+        expected_flag: ex.should_flag,
+        got_flag,
     }
-    out
 }
 
 /// (id, category) for every loaded DSL rule — for the `rules` listing.
@@ -323,4 +337,47 @@ pub fn builtin_rules() -> Vec<BuiltinRule> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod source_example_tests {
+    use super::run_source_examples;
+
+    const RULE: &str = r#"
+rule demo-eval {
+  meta {
+    type: security
+    severity: error
+    message: "eval sur une entrée"
+  }
+  match js: eval($X)
+  when $X is user-input
+  tests {
+    js {
+      "eval(req.query.expr)" => fail
+      "eval('1 + 1')" => pass
+    }
+  }
+}
+"#;
+
+    #[test]
+    fn the_tests_of_one_rule_run_from_its_source() {
+        let outcomes = run_source_examples(RULE).unwrap();
+        assert_eq!(outcomes.len(), 2);
+        assert!(outcomes.iter().all(|o| o.passed()));
+        assert!(outcomes[0].expected_flag && outcomes[0].got_flag);
+    }
+
+    #[test]
+    fn a_wrong_expectation_is_reported() {
+        let wrong = RULE.replace("\"eval('1 + 1')\" => pass", "\"eval('1 + 1')\" => fail");
+        let outcomes = run_source_examples(&wrong).unwrap();
+        assert!(!outcomes[1].passed());
+    }
+
+    #[test]
+    fn an_unreadable_source_gives_the_parser_message() {
+        assert!(run_source_examples("rule {").is_err());
+    }
 }

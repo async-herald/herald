@@ -60,15 +60,7 @@ impl HeraldApp {
                     theme,
                     cx.listener(|app, _, _, cx| app.open_alerts(cx)),
                 ))
-            })
-            .child(nav_item(
-                "nav-settings",
-                "Réglages",
-                self.screen == Screen::Settings,
-                None,
-                theme,
-                cx.listener(|app, _, _, cx| app.open_settings(cx)),
-            ));
+            });
 
         div()
             .w(SIDEBAR_WIDTH)
@@ -287,6 +279,30 @@ impl HeraldApp {
                     .child("Local, sans IA"),
             )
     }
+}
+
+/// Lien « Réglages » du bas de la barre latérale, à côté du compte.
+pub(super) fn settings_link(
+    active: bool,
+    theme: Theme,
+    cx: &mut Context<HeraldApp>,
+) -> impl IntoElement {
+    div()
+        .id("nav-settings")
+        .flex_none()
+        .text_size(metrics::TEXT_XS)
+        .cursor_pointer()
+        .when(active, |this| {
+            this.text_color(theme.ink)
+                .font_weight(FontWeight::MEDIUM)
+                .underline()
+        })
+        .when(!active, |this| {
+            this.text_color(theme.ink_muted)
+                .hover(|style| style.text_color(theme.ink).underline())
+        })
+        .on_click(cx.listener(|app, _, _, cx| app.open_settings(cx)))
+        .child("Réglages")
 }
 
 fn nav_item(

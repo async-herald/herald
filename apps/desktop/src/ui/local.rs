@@ -30,7 +30,24 @@ impl AnalysisService {
     }
 }
 
+/// Signalements de faux positifs : ils passent par herald.codes, absent ici.
+#[derive(Clone)]
+pub(super) struct ReportService;
+
+impl ReportService {
+    pub(super) fn send(&self, _report: &impl serde::Serialize) -> Result<(), String> {
+        Err(
+            "Le signalement passe par herald.codes : il demande la version officielle de Herald."
+                .to_owned(),
+        )
+    }
+}
+
 impl HeraldApp {
+    pub(super) fn report_service(&self) -> ReportService {
+        ReportService
+    }
+
     pub(super) fn start_service(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.dev_autostart(cx);
     }
@@ -90,10 +107,20 @@ impl HeraldApp {
 
     pub(super) fn render_account_row(
         &self,
-        _theme: Theme,
-        _cx: &mut Context<Self>,
+        theme: Theme,
+        cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        None
+        Some(
+            div()
+                .flex()
+                .justify_end()
+                .child(super::sidebar::settings_link(
+                    self.screen == super::app::Screen::Settings,
+                    theme,
+                    cx,
+                ))
+                .into_any_element(),
+        )
     }
 
     pub(super) fn quota_note(&self) -> Option<&'static str> {
@@ -101,6 +128,32 @@ impl HeraldApp {
     }
 
     pub(super) fn prepare_account_settings(&mut self, _cx: &mut Context<Self>) {}
+
+    /// Pas de compte : pas de fil public, rien à demander avant l'analyse.
+    pub(super) fn ask_public_feed_first(&mut self, _cx: &mut Context<Self>) -> bool {
+        false
+    }
+
+    pub(super) fn render_public_feed_prompt(
+        &self,
+        _theme: Theme,
+        _window: &mut gpui::Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        None
+    }
+
+    /// Pas de compte : pas d'onglet « Signalements ».
+    pub(super) fn render_reports_section(
+        &self,
+        _theme: Theme,
+        _cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        None
+    }
+
+    pub(super) fn load_own_reports(&mut self, _window: &mut gpui::Window, _cx: &mut Context<Self>) {
+    }
 
     pub(super) fn render_account_section(
         &self,

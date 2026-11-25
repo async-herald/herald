@@ -345,6 +345,12 @@ struct Syntax {
     keywords: &'static [&'static str],
 }
 
+/// Mots du langage des règles `.herald` (éditeur de règles).
+const HERALD_KEYWORDS: &[&str] = &[
+    "and", "constant", "dynamic", "fail", "find", "is", "match", "matches", "measure", "message",
+    "meta", "not", "or", "pass", "rule", "severity", "tests", "type", "use", "when",
+];
+
 const KEYWORDS: &[&str] = &[
     "abstract",
     "and",
@@ -469,7 +475,13 @@ impl Syntax {
             } else {
                 "//"
             },
-            keywords: if plain { &[] } else { KEYWORDS },
+            keywords: if plain {
+                &[]
+            } else if ext == "herald" {
+                HERALD_KEYWORDS
+            } else {
+                KEYWORDS
+            },
         }
     }
 
@@ -597,6 +609,8 @@ pub struct CodeArea {
     saved_version: u64,
     layout: Option<Layout>,
     is_selecting: bool,
+    /// Zone de texte simple : ni numéros de ligne ni marge, fond de surface.
+    plain: bool,
 }
 
 impl EventEmitter<CodeAreaEvent> for CodeArea {}
@@ -625,7 +639,14 @@ impl CodeArea {
             saved_version: 0,
             layout: None,
             is_selecting: false,
+            plain: false,
         }
+    }
+
+    /// Zone de texte simple (commentaire) : sans numéros de ligne ni marge.
+    pub fn plain(mut self) -> Self {
+        self.plain = true;
+        self
     }
 
     pub fn text(&self) -> &str {
@@ -1619,7 +1640,11 @@ impl Render for CodeArea {
             .key_context(KEY_CONTEXT)
             .track_focus(&self.focus_handle)
             .cursor(CursorStyle::IBeam)
-            .bg(theme.code_bg)
+            .bg(if self.plain {
+                theme.bg_surface
+            } else {
+                theme.code_bg
+            })
             .font_family(fonts::MONO)
             .text_size(metrics::TEXT_BASE)
             .on_action(cx.listener(Self::backspace))
@@ -1742,6 +1767,7 @@ struct PaintedLine {
 
 struct PrepaintState {
     layout: Layout,
+    plain: bool,
     gutter_right: Pixels,
     lines: Vec<PaintedLine>,
     selections: Vec<PaintQuad>,
@@ -1809,10 +1835,14 @@ impl Element for CodeElement {
             .map_or(FALLBACK_CHAR_WIDTH, |advance| advance.width);
 
         let focused = self.area.read(cx).focus_handle.is_focused(window);
+        let plain = self.area.read(cx).plain;
         let line_count = self.area.read(cx).buffer.line_count();
         let digits = line_count.to_string().len().max(3);
-        let gutter_right =
-            bounds.left() + MARKER_COLUMN + char_width * digits as f32 + metrics::SPACE_2;
+        let gutter_right = if plain {
+            bounds.left()
+        } else {
+            bounds.left() + MARKER_COLUMN + char_width * digits as f32 + metrics::SPACE_2
+        };
         let text_left = gutter_right + metrics::SPACE_3;
         let text_width = bounds.right() - text_left;
 
@@ -1958,7 +1988,7 @@ impl Element for CodeElement {
             let background = match severity {
                 Some(Severity::Critical) => Some(theme.code_line_critical),
                 Some(Severity::Warning) => Some(theme.code_line_warning),
-                _ if row == cursor_row && area.selected.is_empty() && focused => {
+                _ if !plain && row == cursor_row && area.selected.is_empty() && focused => {
                     Some(theme.code_current_line)
                 }
                 _ => None,
@@ -2028,6 +2058,7 @@ impl Element for CodeElement {
         };
         PrepaintState {
             layout,
+            plain,
             gutter_right,
             lines,
             selections,
@@ -2095,6 +2126,9 @@ impl Element for CodeElement {
             );
 
             // Marge : numéros alignés à droite et marqueurs de problème.
+            if prepaint.plain {
+                return;
+            }
             window.paint_quad(fill(
                 Bounds::from_corners(
                     point(prepaint.gutter_right + metrics::SPACE_2, bounds.top()),

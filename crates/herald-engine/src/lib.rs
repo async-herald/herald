@@ -15,7 +15,6 @@ pub mod types;
 use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
-use tree_sitter::Tree;
 
 use crate::config::Config;
 use crate::language::Language;
@@ -40,6 +39,9 @@ pub async fn analyze(req: &AnalyzeRequest, config: &Config) -> AnalyzeResponse {
 /// avec ses relevés propres (hors analyses transverses, faites à la fin).
 /// Les fichiers sont analysés en parallèle : `on_file` est appelé depuis les
 /// fils de calcul, dans l'ordre où ils se terminent.
+/// Langage et symboles d'un fichier, pour l'analyse entre fichiers.
+type Symbols = Option<(Language, semantic::FileSymbols)>;
+
 pub async fn analyze_with_progress(
     req: &AnalyzeRequest,
     config: &Config,
@@ -52,17 +54,18 @@ pub async fn analyze_with_progress(
         Some(dsl::compile(&config.rule_sources)).filter(|c| !c.is_empty())
     };
 
-    let deadline = Instant::now() + ANALYZE_BUDGET;
+    let deadline = (!config.no_time_budget).then(|| Instant::now() + ANALYZE_BUDGET);
+    let over_budget = || deadline.is_some_and(|deadline| Instant::now() >= deadline);
 
     let (mut per_file, cross) = tokio::task::block_in_place(|| {
-        let computed: Vec<((Option<Language>, Option<Tree>), Vec<Issue>)> = req
+        let computed: Vec<(Symbols, Vec<Issue>)> = req
             .files
             .par_iter()
             .map(|f| {
                 // Budget dépassé : on n'entame plus de nouveau fichier, mais on
                 // ne coupe pas ceux déjà en cours sur les autres threads.
-                if Instant::now() >= deadline {
-                    return ((None, None), Vec::new());
+                if over_budget() {
+                    return (None, Vec::new());
                 }
                 let lang = Language::from_path(&f.path);
                 let tree = lang.and_then(|l| parser::parse(&f.code, l));
@@ -82,18 +85,20 @@ pub async fn analyze_with_progress(
                 // par la DSL — hors périmètre de `retain_prod` (pas du code).
                 issues.extend(rules::run_devops(&f.path, &f.code, config));
                 on_file(&f.path, &issues);
-                ((lang, tree), issues)
+                // Seuls les symboles servent à l'analyse entre fichiers : l'arbre
+                // est libéré ici, fichier par fichier.
+                let symbols = lang.map(|l| (l, semantic::symbols(tree.as_ref(), &f.code, l)));
+                (symbols, issues)
             })
             .collect();
 
-        let (parsed, per_file): (Vec<(Option<Language>, Option<Tree>)>, Vec<Vec<Issue>>) =
-            computed.into_iter().unzip();
+        let (symbols, per_file): (Vec<Symbols>, Vec<Vec<Issue>>) = computed.into_iter().unzip();
 
-        let cross = semantic::analyze(&req.files, &parsed, config);
+        let cross = semantic::analyze(&req.files, symbols, config);
         (per_file, cross)
     });
 
-    if Instant::now() >= deadline {
+    if over_budget() {
         eprintln!(
             "[analyze] budget de {}s dépassé sur {} fichiers — rapport partiel",
             ANALYZE_BUDGET.as_secs(),

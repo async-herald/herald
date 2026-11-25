@@ -127,6 +127,10 @@ impl HeraldApp {
         if self.usage().is_some_and(|usage| usage.is_exhausted()) {
             return;
         }
+        // Toute première analyse : demander d'abord pour le fil public.
+        if self.ask_public_feed_first(cx) {
+            return;
+        }
         let Some(project) = self.project() else {
             return;
         };
@@ -522,7 +526,7 @@ impl AnalysisRun {
         match phase {
             Phase::Preparing => 0,
             Phase::Rules => 1,
-            Phase::Reading => 2,
+            Phase::Reading { .. } => 2,
             Phase::Analyzing { .. } => 3,
             Phase::Dependencies => 4,
             Phase::Scoring => 5,
@@ -571,7 +575,7 @@ impl AnalysisRun {
         let percent = match phase {
             Phase::Preparing => 2,
             Phase::Rules => 5,
-            Phase::Reading => 8,
+            Phase::Reading { .. } => 8,
             Phase::Analyzing { files } => {
                 let started = self.step_started[3].unwrap_or(now);
                 let elapsed = (now - started).as_secs_f32() * 1000.;

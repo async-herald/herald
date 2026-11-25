@@ -21,7 +21,9 @@ pub(crate) use advisory::advisory_for_tests;
 pub use grade::{Grade, GradeTone};
 pub use issue::{Category, Issue, Severity, humanize_rule};
 pub use project::Project;
-pub use report::{AnalysisReport, CategoryScore, IssueGroup, SourceFile, Summary, format_points};
+pub use report::{
+    AnalysisReport, CategoryScore, IssueGroup, PackageScore, SourceFile, Summary, format_points,
+};
 pub use rule::{Rule, RuleCatalog, RuleOrigin};
 pub use rule_text::{rule_text, rule_title};
 pub use usage::Usage;

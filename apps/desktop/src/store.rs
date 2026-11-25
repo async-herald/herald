@@ -68,6 +68,12 @@ CREATE TABLE IF NOT EXISTS rule_overrides (
     id      TEXT PRIMARY KEY,
     enabled INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS custom_rules (
+    id         TEXT PRIMARY KEY,
+    source     TEXT NOT NULL,
+    enabled    INTEGER NOT NULL DEFAULT 1,
+    updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS osv_cache (
     id         TEXT PRIMARY KEY,
     data       TEXT NOT NULL,
@@ -81,6 +87,8 @@ struct StoredReport {
     summary: Summary,
     categories: Vec<CategoryScore>,
     issues: Vec<Issue>,
+    #[serde(default)]
+    packages: Vec<crate::model::PackageScore>,
 }
 
 /// Une analyse de l'historique d'un projet (bandeau du héraut, courbes des cartes).
@@ -231,7 +239,9 @@ fn latest_report(conn: &Connection, path: &Path) -> Option<AnalysisReport> {
     let mut summary = stored.summary;
     summary.analyzed_at = analyzed_label(summary.analyzed_at_unix).into();
     let sources = crate::engine::read_sources(path, &stored.issues);
+    let packages = std::mem::take(&mut stored.packages);
     let mut report = AnalysisReport::new(summary, stored.categories, stored.issues, sources);
+    report.packages = packages;
     let resolved: Vec<usize> = serde_json::from_str(&resolved).unwrap_or_default();
     report.set_resolved(resolved);
     Some(report)
@@ -303,6 +313,7 @@ pub fn save_analysis(path: &Path, report: &AnalysisReport) -> Option<i64> {
         summary: report.summary.clone(),
         categories: report.categories.clone(),
         issues: report.issues.clone(),
+        packages: report.packages.clone(),
     };
     let json = serde_json::to_string(&stored).ok()?;
     let resolved = serde_json::to_string(&report.resolved_indices()).ok()?;
@@ -616,6 +627,85 @@ pub fn clear_rule_overrides() {
     log("règles", conn.execute("DELETE FROM rule_overrides", []));
 }
 
+// ── Règles personnelles (éditeur .herald) ─────────────────────────────────
+
+/// Règle écrite par l'utilisateur dans l'éditeur, gardée sur cette machine.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CustomRule {
+    pub id: String,
+    pub source: String,
+    pub enabled: bool,
+}
+
+/// Règles personnelles, par identifiant.
+pub fn custom_rules() -> Vec<CustomRule> {
+    let Some(conn) = db() else {
+        return Vec::new();
+    };
+    conn.prepare("SELECT id, source, enabled FROM custom_rules ORDER BY id")
+        .and_then(|mut stmt| {
+            stmt.query_map([], |r| {
+                Ok(CustomRule {
+                    id: r.get(0)?,
+                    source: r.get(1)?,
+                    enabled: r.get(2)?,
+                })
+            })?
+            .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Enregistre une règle personnelle. `previous_id` : son identifiant avant
+/// modification (renommée, l'ancienne ligne disparaît et l'état activé suit).
+pub fn save_custom_rule(previous_id: Option<&str>, id: &str, source: &str) {
+    let Some(mut conn) = db() else { return };
+    let result = (|| {
+        let tx = conn.transaction()?;
+        let enabled: bool = previous_id
+            .map(|previous| {
+                tx.query_row(
+                    "SELECT enabled FROM custom_rules WHERE id = ?1",
+                    params![previous],
+                    |r| r.get(0),
+                )
+                .optional()
+            })
+            .transpose()?
+            .flatten()
+            .unwrap_or(true);
+        if let Some(previous) = previous_id.filter(|previous| *previous != id) {
+            tx.execute("DELETE FROM custom_rules WHERE id = ?1", params![previous])?;
+        }
+        tx.execute(
+            "INSERT OR REPLACE INTO custom_rules (id, source, enabled, updated_at) \
+             VALUES (?1, ?2, ?3, ?4)",
+            params![id, source, enabled, cve::unix_now() as i64],
+        )?;
+        tx.commit()
+    })();
+    log("règle personnelle", result);
+}
+
+pub fn set_custom_rule_enabled(id: &str, enabled: bool) {
+    let Some(conn) = db() else { return };
+    log(
+        "règle personnelle",
+        conn.execute(
+            "UPDATE custom_rules SET enabled = ?2 WHERE id = ?1",
+            params![id, enabled],
+        ),
+    );
+}
+
+pub fn delete_custom_rule(id: &str) {
+    let Some(conn) = db() else { return };
+    log(
+        "règle personnelle",
+        conn.execute("DELETE FROM custom_rules WHERE id = ?1", params![id]),
+    );
+}
+
 // ── Réglages et données locales ────────────────────────────────────────────
 
 /// Réglage booléen local (`meta`), `default` s'il n'a jamais été changé.
@@ -738,6 +828,7 @@ mod tests {
                 score,
                 previous_score: None,
                 file_count: 3,
+                candidate_count: 3,
                 language_count: 1,
                 duration_ms: 10,
                 issue_count: 1,
@@ -759,6 +850,36 @@ mod tests {
             }],
             vec![],
         )
+    }
+
+    /// Ne touche que `custom_rules` : sans effet sur le test ci-dessous, qui
+    /// partage la même base en mémoire.
+    #[test]
+    fn custom_rules_round_trip() {
+        save_custom_rule(None, "ma-regle", "rule ma-regle {}");
+        assert_eq!(
+            custom_rules(),
+            vec![CustomRule {
+                id: "ma-regle".into(),
+                source: "rule ma-regle {}".into(),
+                enabled: true,
+            }]
+        );
+
+        // Désactivée puis renommée : elle reste désactivée, l'ancien id disparaît.
+        set_custom_rule_enabled("ma-regle", false);
+        save_custom_rule(
+            Some("ma-regle"),
+            "mon-autre-regle",
+            "rule mon-autre-regle {}",
+        );
+        let rules = custom_rules();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].id, "mon-autre-regle");
+        assert!(!rules[0].enabled);
+
+        delete_custom_rule("mon-autre-regle");
+        assert!(custom_rules().is_empty());
     }
 
     /// Un seul test : la base en mémoire est partagée par tout le binaire de test.

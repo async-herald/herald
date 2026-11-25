@@ -143,7 +143,20 @@ impl HeraldApp {
                     .text_size(metrics::TEXT_SM)
                     .text_color(theme.ink_muted)
                     .child(subline),
-            );
+            )
+            .children(report.and_then(|report| {
+                let summary = &report.summary;
+                (summary.candidate_count > summary.file_count).then(|| {
+                    div()
+                        .text_size(metrics::TEXT_SM)
+                        .text_color(theme.warning)
+                        .child(format!(
+                            "Limite atteinte : {} fichiers analysés sur {}. Réglable dans Réglages, onglet Analyse.",
+                            super::home::thousands(summary.file_count),
+                            super::home::thousands(summary.candidate_count),
+                        ))
+                })
+            }));
 
         let top = div()
             .flex()
@@ -292,33 +305,47 @@ pub(super) fn celebration_notice(
 }
 
 /// Bascule Plan / Patterns / Code / Dépendances de l'écran d'analyse.
+/// Onglet souligné des écrans à onglets (Problèmes, Réglages).
+pub(super) fn underline_tab(
+    id: &'static str,
+    label: &'static str,
+    active: bool,
+    theme: Theme,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(id)
+        .py(metrics::SPACE_2)
+        .mb(px(-1.))
+        .border_b_2()
+        .cursor_pointer()
+        .border_color(if active {
+            theme.ink
+        } else {
+            gpui::transparent_black()
+        })
+        .when(active, |this| this.font_weight(FontWeight::SEMIBOLD))
+        .when(!active, |this| {
+            this.text_color(theme.ink_muted)
+                .hover(|style| style.text_color(theme.ink))
+        })
+        .on_click(on_click)
+        .child(label)
+}
+
 fn view_switch(
     current: WorkspaceView,
     theme: Theme,
     cx: &mut Context<HeraldApp>,
 ) -> impl IntoElement {
     let item = |id: &'static str, label: &'static str, view: WorkspaceView| {
-        let active = current == view;
-        div()
-            .id(id)
-            .py(metrics::SPACE_2)
-            .mb(px(-1.))
-            .border_b_2()
-            .cursor_pointer()
-            .border_color(if active {
-                theme.ink
-            } else {
-                gpui::transparent_black()
-            })
-            .when(active, |this| this.font_weight(FontWeight::SEMIBOLD))
-            .when(!active, |this| {
-                this.text_color(theme.ink_muted)
-                    .hover(|style| style.text_color(theme.ink))
-            })
-            .on_click(
-                cx.listener(move |app, _, window, cx| app.set_workspace_view(view, window, cx)),
-            )
-            .child(label)
+        underline_tab(
+            id,
+            label,
+            current == view,
+            theme,
+            cx.listener(move |app, _, window, cx| app.set_workspace_view(view, window, cx)),
+        )
     };
     div()
         .flex()

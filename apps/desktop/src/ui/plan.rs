@@ -482,9 +482,7 @@ fn plan_row(
                         .child("Corrigé, à confirmer"),
                 )
             } else {
-                this.child(Button::new(("plan-open", gi), "Ouvrir", theme).on_click(
-                    cx.listener(move |app, _, window, cx| app.open_group_in_code(gi, window, cx)),
-                ))
+                this.child(row_actions(gi, theme, cx))
             }
         })
         .child(
@@ -682,6 +680,45 @@ fn score_aside(
                 ),
         )
         .child(rerun)
+}
+
+/// « Faux positif » (ouvre la modale de signalement) et « Ouvrir ».
+fn row_actions(gi: usize, theme: Theme, cx: &mut Context<HeraldApp>) -> AnyElement {
+    div()
+        .flex()
+        .items_center()
+        .gap(metrics::SPACE_2)
+        .child(
+            div()
+                .id(("plan-false-positive", gi))
+                .flex()
+                .items_center()
+                .gap(metrics::SPACE_2)
+                .h(metrics::CONTROL_H)
+                .px(metrics::SPACE_3)
+                .rounded(metrics::RADIUS)
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.bg_surface)
+                .text_size(metrics::TEXT_SM)
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(theme.ink_muted)
+                .cursor_pointer()
+                .hover(|style| style.bg(theme.bg_hover))
+                .on_click(
+                    cx.listener(move |app, _, window, cx| app.open_false_positive(gi, window, cx)),
+                )
+                .child(Icon::new(IconName::Flag, theme.ink_muted).size(metrics::ICON_SM))
+                .child("Faux positif"),
+        )
+        .child(
+            Button::new(("plan-open", gi), "Ouvrir", theme)
+                .icon(IconName::ArrowRight)
+                .on_click(
+                    cx.listener(move |app, _, window, cx| app.open_group_in_code(gi, window, cx)),
+                ),
+        )
+        .into_any_element()
 }
 
 #[cfg(test)]

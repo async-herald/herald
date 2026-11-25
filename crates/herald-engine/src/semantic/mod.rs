@@ -11,7 +11,15 @@ use tree_sitter::Tree;
 
 use crate::types::{FileInput, Issue, Severity};
 
-use extract::FileSymbols;
+pub use extract::FileSymbols;
+
+/// Symboles d'un fichier (imports, exports…) : tout ce dont l'analyse entre
+/// fichiers a besoin. Extraits pendant le passage fichier par fichier, ils
+/// permettent de libérer l'arbre syntaxique aussitôt (sur un gros dépôt, garder
+/// tous les arbres jusqu'à la fin coûtait plus d'un Go).
+pub fn symbols(tree: Option<&Tree>, code: &str, language: Language) -> FileSymbols {
+    extract::extract(tree, code, language)
+}
 
 struct Node {
     path: String,
@@ -19,9 +27,10 @@ struct Node {
     sym: FileSymbols,
 }
 
+/// `symbols[i]` : langage et symboles de `files[i]` (`None` sans langage reconnu).
 pub fn analyze(
     files: &[FileInput],
-    parsed: &[(Option<Language>, Option<Tree>)],
+    symbols: Vec<Option<(Language, FileSymbols)>>,
     config: &Config,
 ) -> HashMap<String, Vec<Issue>> {
     let mut out: HashMap<String, Vec<Issue>> = HashMap::new();
@@ -33,13 +42,13 @@ pub fn analyze(
 
     let nodes: Vec<Node> = files
         .iter()
-        .zip(parsed)
-        .filter_map(|(f, (lang, tree))| {
-            let lang = (*lang)?;
+        .zip(symbols)
+        .filter_map(|(f, symbols)| {
+            let (lang, sym) = symbols?;
             Some(Node {
                 path: f.path.clone(),
                 lang,
-                sym: extract::extract(tree.as_ref(), &f.code, lang),
+                sym,
             })
         })
         .collect();
